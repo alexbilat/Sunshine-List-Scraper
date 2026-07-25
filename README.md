@@ -1,6 +1,6 @@
 # Ontario Sunshine List Scraper
 
-A Python script that pulls every public record from the [Ontario Public Sector Salary Disclosure](https://www.ontario.ca/page/public-sector-salary-disclosure) ("Sunshine List") - every public employee in Ontario who earned over $100,000 in a given year — and turns it into a clean, deduplicated dataset with summary charts.
+A Python script that pulls every public record from the [Ontario Public Sector Salary Disclosure](https://www.ontario.ca/page/public-sector-salary-disclosure) ("Sunshine List") - every public employee in Ontario who earned over $100,000 in a given year - and turns it into a clean, deduplicated dataset with summary charts.
 
 Instead of scraping rendered HTML tables, the script crawls the disclosure page for resource links, then queries Ontario's [CKAN open data API](https://data.ontario.ca/api/3/action/datastore_search) directly using each dataset's UUID.
 
