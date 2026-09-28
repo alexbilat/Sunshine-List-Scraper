@@ -19,6 +19,11 @@ Instead of scraping rendered HTML tables, the script crawls the disclosure page 
    - A console summary of average salary and number of people per year.
    - Two charts: headcount and average salary by year, and the 10 most common job titles.
 
+![Example_Output](Example_output/chart_titles.png)
+![Example_Output](Example_output/chart_yearly.png)
+
+
+
 ## Setup
 
 ```bash
