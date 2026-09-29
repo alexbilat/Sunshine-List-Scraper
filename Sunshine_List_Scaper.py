@@ -1,25 +1,17 @@
 #########################################################
 # NAME: Alex_Bilat
 # COURSE: ICS4U
-# FILE: Bilat.Alex_Assignement_3_Main.py
-# DESCRIPTION: Web scraping assignement
+# FILE: Sunshine_List_Scraper.py
+# DESCRIPTION: Main script 
 #########################################################
 
 # Importing
-import requests
-from bs4 import BeautifulSoup
-import sys
-import os
-import time
-from collections import Counter
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
+from config import *
 
 # For character stripping later
 sys.stdout.reconfigure(encoding="utf-8")
 
 # Main
-url = 'https://www.ontario.ca/page/public-sector-salary-disclosure' # I wanna scrape this!
 response = requests.get(url)
 if response.status_code != 200: # If request is invalid
     print(f'Error in url: {url}')
@@ -39,9 +31,6 @@ for link in soup.find_all("a", href = True):
 
     if 'public-sector-salary-disclosure' in url.lower() and 'resource' in url.lower(): # Filter out a lot of links
         resource_links.append(url) # Add the right url to the link_list
-
-
-api_url = "https://data.ontario.ca/api/3/action/datastore_search" # Instead of searching the URL's, use government of ontario API to request faster withthe custom UUID at the end 
 
 # Structure for this list is a list with a bunch of hashmaps inside. The hashmap will have certain information about each person. We will sort this list later. 
 
@@ -151,7 +140,6 @@ for link in resource_links:
  
 names_list = sorted(names_list, key=lambda x: x['Salary'], reverse=True) # Sort the list. Might try do manual sorting if there's time (There was no time)
 
-output_path = 'output.txt' # Output here
 try:
     output_file = open(output_path, 'w', encoding='utf-8') # Open file
 except FileNotFoundError as e:
