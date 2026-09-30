@@ -27,7 +27,8 @@ Instead of scraping rendered HTML tables, the script crawls the disclosure page 
 ## Setup
 
 ```bash
-pip install requests beautifulsoup4 matplotlib
+pip install -r requirements.txt
+python Sunshine_List_Scaper.py
 ```
 
 This will:
@@ -36,3 +37,7 @@ This will:
 - Print average salary and headcount per year to the console
 - Save `chart_yearly.png` and `chart_titles.png` in the working directory
 
+
+## Project structure
+
+The entry point is `Sunshine_List_Scaper.py`; edit URLs and output paths in `config.py`. Collection, processing, export, reporting, and coordination live in the `sunshine_scraper/` package. See [the architecture document](docs/architecture.md) for responsibilities, preserved behavior, and future extension points.
