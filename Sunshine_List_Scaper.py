@@ -9,21 +9,29 @@ logger = logging.getLogger(__name__)
 
 
 def main():
+    """Return 0 for success, 1 for failure, or 130 for a user interruption."""
+    # Configure logging once at startup. Each module supplies its own logger name.
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s %(levelname)s %(name)s: %(message)s')
     try:
+        # Keep a default INFO handler even if the configured level is invalid.
         logging.getLogger().setLevel(config.log_level)
+        # Some captured output streams cannot change encoding.
         if hasattr(sys.stdout, 'reconfigure'):
             sys.stdout.reconfigure(encoding='utf-8')
         complete = run(config.url, config.api_url, config.output_path,
             config.yearly_chart_path, config.titles_chart_path,
             timeout=config.request_timeout, max_retries=config.max_retries,
             backoff=config.retry_backoff)
-        return 0 if complete else 1
+        if complete:
+            return 0
+        return 1
     except (ScraperError, OSError) as error:
+        # Expected request/data failures and file errors get a concise message.
         logger.error("Scraper stopped: %s", error)
         return 1
     except KeyboardInterrupt:
+        # Ctrl+C is an intentional interruption, not a programming bug.
         logger.warning("Scraper interrupted by user")
         return 130
     except Exception:
@@ -32,5 +40,7 @@ def main():
         return 1
 
 
+# Importing this file does not run the scraper. Direct execution does.
+# SystemExit passes main's result to the shell as the process exit code.
 if __name__ == '__main__':
     raise SystemExit(main())
