@@ -1,18 +1,26 @@
-"""User-editable settings. Relative output paths use the working directory."""
+"""Settings you can edit without changing the scraper's implementation.
+
+Relative output paths are resolved from the directory where you run Python.
+"""
+# Discovery reads the webpage; record downloads use the separate CKAN API.
 url = 'https://www.ontario.ca/page/public-sector-salary-disclosure'
 api_url = 'https://data.ontario.ca/api/3/action/datastore_search'
-output_path = 'output.txt' # Change to whatever you would like
+
+# Choose filenames or paths to existing directories; directories are not created.
+output_path = 'output.txt'
 yearly_chart_path = 'chart_yearly.png'
 titles_chart_path = 'chart_titles.png'
 
-# Timeout is in seconds; retries are additional attempts after the first.
+# Seconds allowed for connection/read waiting, not a deadline for the entire run.
 request_timeout = 30
-max_retries = 2
-retry_backoff = 1
-log_level = "INFO"  # Use "DEBUG" for per-page and per-row diagnostics.
 
-#| DEBUG | Individual skipped-row reasons, repeated resource links, and page offsets |
-#| INFO | Discovery count, per-resource valid/invalid/duplicate counts, yearly summaries, and saved TSV count |
-#| WARNING | Retrying a request, invalid-row summaries, missing titles, no title-chart data, and user interruption |
-#| ERROR | Failed resource, incomplete run, output/chart failures, or a run that must stop |
-#| CRITICAL | Available in Python, but not needed for this command-line scraper
+# Extra attempts after the first: 2 retries gives up to 3 attempts per request.
+max_retries = 2
+
+# Starting retry delay in seconds. A value of 1 gives waits of 1s, then 2s.
+retry_backoff = 1
+
+# INFO shows progress plus warnings/errors. DEBUG adds page/row diagnostics.
+# WARNING hides ordinary progress; ERROR shows only failures.
+# CRITICAL is available in Python but is not used by this scraper.
+log_level = 'INFO'
