@@ -3,3 +3,4 @@ __pycache__/
 *.py[cod]
 docs
 sunshine_scraper\__pycache__
+tests
