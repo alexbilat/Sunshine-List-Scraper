@@ -40,4 +40,18 @@ This will:
 
 ## Project structure
 
-The entry point is `Sunshine_List_Scaper.py`; edit URLs and output paths in `config.py`. Collection, processing, export, reporting, and coordination live in the `sunshine_scraper/` package. See [the architecture document](docs/architecture.md) for responsibilities, preserved behavior, and future extension points.
+The entry point is `Sunshine_List_Scaper.py`; edit URLs and output paths in `config.py`. Collection, processing, export, reporting, and coordination live in the `sunshine_scraper/` package. See [the v0.3 learning guide](docs/v0.3-error-handling-and-logging.md) for module responsibilities, error-handling policies, and detailed explanations.
+
+## v0.3 — Error handling and logging
+
+Requests have configurable timeouts and bounded retries. Invalid API responses and rows are handled explicitly; duplicate records are counted. Progress, warnings, and failures use Python logging. Set `log_level` in `config.py` to `DEBUG` for detailed diagnostics.
+
+A run with failed datasets exports usable results and exits with status 1 to identify incomplete coverage. A run with no usable records preserves existing outputs. TSV export uses a temporary file and replacement to protect the previous output on write failures.
+
+Read the [detailed learning guide](docs/v0.3-error-handling-and-logging.md) for try/except, HTTP status codes, retries, logging levels, validation policies, and exit codes.
+
+Run offline checks:
+
+```bash
+python -m unittest discover -s tests -v
+```
