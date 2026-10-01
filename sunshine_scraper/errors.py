@@ -1,3 +1,10 @@
-"""Expected failures that the command-line application can explain."""
+"""Application-specific errors shared by the network layer and CLI."""
+
+
 class ScraperError(Exception):
-    """A request, response, or run could not be completed safely."""
+    """An expected failure that prevents a request or run from completing.
+
+    Inheriting Exception gives this class normal Python exception behavior.
+    Its distinct name lets the pipeline catch known scraper failures without
+    catching unrelated bugs, while the CLI provides the final error message.
+    """
