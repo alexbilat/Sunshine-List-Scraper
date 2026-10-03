@@ -1,4 +1,17 @@
-"""Offline failure scenarios; no real API requests or retry sleeps."""
+"""Check scraper behavior with controlled inputs, including expected failures.
+
+Run from the repository root: python -m unittest discover -s tests -v
+unittest finds methods whose names start with test_ and reports failed assertions.
+Most tests follow arrange (prepare inputs), act (call code), assert (check results).
+
+Mock is a stand-in object: return_value sets what a call returns; side_effect
+can raise an exception or supply successive outcomes from a list. patch replaces
+an object temporarily and restores it when the decorated test/context ends.
+Patch the name used by the module under test, so its calls use the replacement.
+
+Network access and retry sleeps are replaced. Some tests still exercise real
+TSV writing and PNG generation, using automatically cleaned temporary folders.
+"""
 import importlib.util
 import tempfile
 import unittest
@@ -6,6 +19,8 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 import requests
 import matplotlib
+# Use a noninteractive backend before importing reporting: save images without
+# opening chart windows, so these tests also work on machines without a display.
 matplotlib.use('Agg')
 from sunshine_scraper.client import request_page, fetch_all_records, discover_resource_links
 from sunshine_scraper.errors import ScraperError
@@ -16,45 +31,67 @@ from sunshine_scraper.reporting import create_charts
 
 
 def response(status=200, records=None):
+    """Build a fake HTTP response with the attributes the client actually uses."""
+    # This is not a requests.Response; it only mimics status_code and json().
     result = Mock(status_code=status)
     result.json.return_value = {'success': True, 'result': {'records': records or []}}
     return result
 
 
 def person(**changes):
+    """Build a fresh valid row, overriding selected fields for a specific scenario."""
     row = {'First Name': ' Alex\xa0 ', 'Last Name': 'Bilat',
            'Job Title': 'Developer', 'Employer': 'Ontario',
            'Calendar Year': '2024', 'Salary Paid': '$123,456.00'}
+    # **changes collects keyword arguments into a dict. Tests pass **{...} when
+    # field names contain spaces and cannot be written as ordinary keywords.
     row.update(changes)
     return row
 
 
 class RequestTests(unittest.TestCase):
+    """Exercise HTTP recovery, discovery, and API pagination without a live server."""
+
+    # Stacked patches inject mocks bottom-up: get first, then sleep.
+    # Replacing sleep lets us inspect delays without actually waiting.
     @patch('sunshine_scraper.client.time.sleep')
     @patch('sunshine_scraper.client.requests.get')
     def test_timeout_and_503_retry_then_success(self, get, sleep):
+        """A timeout and HTTP 503 should retry, then return the successful response."""
         good = response()
+        # Each successive GET raises/returns the next item in this sequence.
         get.side_effect = [requests.Timeout(), response(503), good]
+        # assertLogs captures messages and fails if none meet the requested level.
         with self.assertLogs('sunshine_scraper.client', level='WARNING'):
+            # assertIs checks that the exact successful object is returned.
             self.assertIs(request_page('url'), good)
+        # call_args_list records every call; args[0] is the requested sleep delay.
         self.assertEqual([call.args[0] for call in sleep.call_args_list], [1, 2])
         self.assertEqual(get.call_args.kwargs['timeout'], 30)
 
     @patch('sunshine_scraper.client.time.sleep')
     @patch('sunshine_scraper.client.requests.get')
     def test_status_policy_and_exhaustion(self, get, sleep):
+        """Permanent statuses stop immediately; temporary failures exhaust bounded retries."""
+        # With two extra retries, temporary errors make three total requests.
         for status, attempts in [(404, 1), (401, 1), (429, 3), (500, 3)]:
+            # Clear call history so the next status has independent counts.
             get.reset_mock(); sleep.reset_mock()
             get.side_effect = None; get.return_value = response(status)
+            # An expected exception makes this assertion pass, not fail.
             with self.assertRaises(ScraperError):
                 request_page('url')
             self.assertEqual(get.call_count, attempts)
             self.assertEqual(sleep.call_count, attempts - 1)
+        # max_retries=0 means even a retryable connection failure stops at once.
         get.side_effect = requests.ConnectionError('offline')
         with self.assertRaises(ScraperError):
             request_page('url', max_retries=0)
 
     def test_bad_request_options(self):
+        """Reject invalid settings before a network request can be attempted."""
+        # NaN is a non-finite float; it is not a usable timeout.
+        # **options supplies each dictionary entry as a named argument.
         for options in ({'timeout': 0}, {'timeout': float('nan')},
                         {'max_retries': -1}, {'backoff': -1}):
             with self.assertRaises(ScraperError):
@@ -62,31 +99,43 @@ class RequestTests(unittest.TestCase):
 
     @patch('sunshine_scraper.client.request_page')
     def test_malformed_payloads(self, request):
+        """Reject broken JSON structures and JSON decoding failures with useful context."""
+        # These are valid Python values but violate CKAN's expected schema.
         for payload in (None, [], {}, {'success': False},
                         {'success': True, 'result': {}},
                         {'success': True, 'result': {'records': {}}}):
             request.return_value = response()
             request.return_value.json.return_value = payload
+            # Also check message context: which page caused the failure?
             with self.assertRaisesRegex(ScraperError, 'offset 0'):
                 fetch_all_records('api', 'abc')
+        # Separately simulate json() failing to decode the response body.
         request.return_value.json.side_effect = ValueError('bad JSON')
         with self.assertRaisesRegex(ScraperError, 'valid JSON'):
             fetch_all_records('api', 'abc')
 
     @patch('sunshine_scraper.client.request_page')
     def test_pagination_and_failed_partial_resource(self, request):
+        """Check page offsets, later-page failure, and protection against repeated pages."""
+        # A tiny page size tests pagination without constructing 100,000 rows.
+        # Two rows fill page one; one row on page two ends the dataset.
         request.side_effect = [response(records=[person(), person()]), response(records=[person()])]
         self.assertEqual(len(fetch_all_records('api', 'abc', page_size=2)), 3)
         self.assertEqual(request.call_args.kwargs['params']['offset'], 2)
+        # Page one succeeds, but page two fails: returning partial data is forbidden.
         request.side_effect = [response(records=[person(), person()]), ScraperError('failed')]
         with self.assertRaisesRegex(ScraperError, 'offset 2'):
             fetch_all_records('api', 'abc', page_size=2)
+        # A server repeating the same full page must not cause an endless loop.
         request.side_effect = [response(records=[person(), person()])] * 2
         with self.assertRaisesRegex(ScraperError, 'repeated'):
             fetch_all_records('api', 'abc', page_size=2)
 
     @patch('sunshine_scraper.client.request_page')
     def test_discovery_deduplicates_and_rejects_empty_page(self, request):
+        """Two links to the same ID count once; a page with no resource links fails."""
+        # b'...' supplies HTML bytes, like response.content from requests.
+        # The different query string/trailing slash still identifies resource abc.
         request.return_value.content = b'<a href="/public-sector-salary-disclosure/resource/abc">a</a><a href="/public-sector-salary-disclosure/resource/abc/?x=1">b</a>'
         self.assertEqual(len(discover_resource_links('page')), 1)
         request.return_value.content = b'<html></html>'
@@ -95,21 +144,31 @@ class RequestTests(unittest.TestCase):
 
 
 class ProcessingTests(unittest.TestCase):
+    """Exercise row cleaning directly; no HTTP calls or output files are needed."""
+
     def test_invalid_rows_and_duplicates(self):
+        """Bad rows and cross-resource duplicates must not enter records or salary totals."""
+        # Mirror pipeline state: accepted records, salaries by year, duplicate keys.
         rows, years, seen = [], {}, set()
+        # Cover wrong row types, missing identity/year fields, and unusable salaries.
         bad = [None, [], 'row', {}, person(**{'First Name': None}),
                person(**{'Employer': {}}), person(**{'Salary Paid': 'NaN'}),
                person(**{'Salary Paid': 'inf'}), person(**{'Salary Paid': '-1'}),
                person(**{'Salary Paid': None}), person(**{'Calendar Year': 'unknown'})]
         with self.assertLogs('sunshine_scraper.processing', level='INFO') as logs:
+            # *bad expands its items into this list, alongside one valid person.
             self.assertEqual(process_records([person(), *bad], 'a', rows, years, seen), (1, len(bad)))
+            # Reuse the SAME collections for resource b to test cross-resource dedup.
             self.assertEqual(process_records([person(**{'First Name': 'alex'})], 'b', rows, years, seen), (0, 0))
         self.assertIn('1 duplicates', ' '.join(logs.output))
         self.assertEqual(rows[0]['Name'], 'Alex Bilat')
+        # The first accepted occurrence keeps its source ID; no double-counting.
         self.assertEqual(rows[0]['UUID'], 'a')
         self.assertEqual(years, {'2024': [123456.0]})
 
     def test_fallback_fields_and_optional_title(self):
+        """Alternate year/salary fields work, and an absent job title remains optional."""
+        # Mirror pipeline state: accepted records, salaries by year, duplicate keys.
         rows, years, seen = [], {}, set()
         process_records([person(**{'Calendar Year': None, 'Year': 2023,
             'Salary Paid': None, 'Salary': '150000', 'Job Title': None})], 'a', rows, years, seen)
@@ -119,22 +178,32 @@ class ProcessingTests(unittest.TestCase):
 
 
 class PipelineTests(unittest.TestCase):
+    """Exercise coordination and output protection using synthetic datasets."""
+
     @patch('sunshine_scraper.pipeline.discover_resource_links', return_value=['/a', '/b'])
     @patch('sunshine_scraper.pipeline.fetch_all_records')
     def test_partial_run_exports_and_returns_failure(self, fetch, discover):
+        """One failed dataset still allows export from another, but the run is incomplete."""
+        # Resource a fails; resource b supplies one valid record.
         fetch.side_effect = [ScraperError('offline'), [person()]]
+        # Real file operations stay inside a scratch directory, deleted on exit.
         with tempfile.TemporaryDirectory() as directory:
             paths = [Path(directory) / name for name in ('output.txt', 'yearly.png', 'titles.png')]
             with self.assertLogs('sunshine_scraper.pipeline', level='INFO') as logs:
+                # *paths expands the TSV and two chart paths as positional arguments.
                 self.assertFalse(run('page', 'api', *paths))
             self.assertTrue(all(path.stat().st_size > 0 for path in paths))
             self.assertIn('Incomplete run', ' '.join(logs.output))
+            # Header plus the one accepted person; chart existence is checked above.
             self.assertEqual(len(paths[0].read_text().splitlines()), 2)
 
     @patch('sunshine_scraper.pipeline.discover_resource_links', return_value=['/a'])
     @patch('sunshine_scraper.pipeline.fetch_all_records', return_value=[])
     def test_empty_run_preserves_output(self, fetch, discover):
+        """An empty collection must not replace an existing output file."""
+        # Real file operations stay inside a scratch directory, deleted on exit.
         with tempfile.TemporaryDirectory() as directory:
+            # Seed an earlier export so preservation can be checked after failure.
             output = Path(directory) / 'out.txt'; output.write_text('old')
             with self.assertRaises(ScraperError):
                 run('page', 'api', output, 'yearly.png', 'titles.png')
@@ -144,67 +213,98 @@ class PipelineTests(unittest.TestCase):
     @patch('sunshine_scraper.pipeline.fetch_all_records', return_value=[person()])
     @patch('sunshine_scraper.pipeline.create_charts', side_effect=OSError('denied'))
     def test_chart_failure_keeps_tsv(self, charts, fetch, discover):
+        """A chart error reports failure while retaining the already-written TSV."""
+        # Real file operations stay inside a scratch directory, deleted on exit.
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'out.txt'
             self.assertFalse(run('page', 'api', output, 'yearly.png', 'titles.png'))
+            # TSV writing happens before chart generation, so this file survives.
             self.assertTrue(output.exists())
 
     @patch('sunshine_scraper.pipeline.discover_resource_links', return_value=['/a', '/b'])
     @patch('sunshine_scraper.pipeline.fetch_all_records')
     @patch('sunshine_scraper.pipeline.create_charts')
     def test_complete_run_sorts_and_deduplicates(self, charts, fetch, discover):
+        """A successful run merges resources, removes duplicates, and sorts salaries."""
+        # Two resources share one person; the second also has a higher salary.
+        # Chart generation is mocked here to focus on coordination and TSV contents.
         fetch.side_effect = [[person()], [person(), person(**{'First Name': 'Other', 'Salary Paid': '200000'})]]
+        # Real file operations stay inside a scratch directory, deleted on exit.
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'out.txt'
             self.assertTrue(run('page', 'api', output, 'yearly.png', 'titles.png'))
             lines = output.read_text().splitlines()
             self.assertEqual(lines[0], 'Name\tSalary\tJob Title\tEmployer\tYear\tUUID')
+            # Header plus TWO unique people, with the higher salary first.
             self.assertEqual(len(lines), 3)
             self.assertTrue(lines[1].startswith('Other Bilat\t200000.0'))
             charts.assert_called_once()
 
     def test_tsv_quotes_embedded_delimiters(self):
+        """A TSV-aware reader must recover tabs and quotes inside a field unchanged."""
         import csv
+        # Real file operations stay inside a scratch directory, deleted on exit.
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'out.txt'
+            # The embedded tab and quote must remain within one field.
+            # Missing columns are intentional: this test targets the writer directly.
             write_records([{'Name': 'Alex', 'Job Title': 'A\tB"C'}], output)
             with output.open(newline='', encoding='utf-8') as source:
                 rows = list(csv.DictReader(source, delimiter='\t'))
             self.assertEqual(rows[0]['Job Title'], 'A\tB"C')
 
     def test_failed_export_preserves_previous_file(self):
+        """Failed replacement keeps the old export and removes its temporary file."""
+        # Real file operations stay inside a scratch directory, deleted on exit.
         with tempfile.TemporaryDirectory() as directory:
+            # Seed an earlier export so preservation can be checked after failure.
             output = Path(directory) / 'out.txt'; output.write_text('old')
+            # Simulate final publication failing after the temporary TSV is written.
+            # PermissionError is a subclass of OSError, hence the assertion below.
             with patch('sunshine_scraper.export.os.replace', side_effect=PermissionError('denied')):
                 with self.assertRaises(OSError):
                     write_records([{'Name': 'Alex'}], output)
             self.assertEqual(output.read_text(), 'old')
+            # No leftover temporary export should remain beside the original.
             self.assertEqual(list(Path(directory).iterdir()), [output])
 
     def test_empty_titles_and_failed_chart_close_figures(self):
+        """Empty titles skip that chart; a save error must still close the figure."""
         from matplotlib import pyplot as plt
+        # Real file operations stay inside a scratch directory, deleted on exit.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             create_charts([], {}, root / 'empty.png', root / 'titles.png')
             self.assertTrue((root / 'empty.png').exists())
             self.assertFalse((root / 'titles.png').exists())
+            # This subdirectory is deliberately absent to force a real save error.
             with self.assertRaises(OSError):
                 create_charts([], {}, root / 'missing' / 'chart.png', root / 'titles.png')
+            # No open matplotlib figures should remain after success or failure.
             self.assertEqual(plt.get_fignums(), [])
 
 
 class EntryPointTests(unittest.TestCase):
+    """Exercise the command-line boundary while replacing the actual scrape."""
+
     def test_exit_codes(self):
+        """main translates completion, failures, and user interruption into exit codes."""
+        # Load the script as a module so we can call main without exiting Python.
+        # Its __main__ guard prevents the real scrape from running on import.
         spec = importlib.util.spec_from_file_location('entry', 'Sunshine_List_Scaper.py')
         entry = importlib.util.module_from_spec(spec); spec.loader.exec_module(entry)
+        # Replace entry.run: test only the CLI's mapping of outcomes to exit codes.
         for result, code in [(True, 0), (False, 1)]:
             with patch.object(entry, 'run', return_value=result):
                 self.assertEqual(entry.main(), code)
+        # Logged errors/tracebacks are expected fixtures here, not failed tests.
+        # Ctrl+C uses 130; expected and unexpected failures use 1.
         for error, code in [(ScraperError('offline'), 1), (OSError('denied'), 1),
                             (RuntimeError('bug'), 1), (KeyboardInterrupt(), 130)]:
             with patch.object(entry, 'run', side_effect=error):
                 self.assertEqual(entry.main(), code)
 
 
+# Direct execution uses unittest's runner; discovery imports the test module.
 if __name__ == '__main__':
     unittest.main()
