@@ -107,7 +107,9 @@ For salary:
 
 The current representation is a Python float, not integer cents. It passes the
 finite/nonnegative check. A database's exact-money design will require a deliberate
-change to this conversion; see chapter 4.
+change to this conversion; see [chapter 4](04-postgresql-architecture.md). The new
+PostgreSQL adapter reads exact cents directly from the raw source, separately from
+this existing export path.
 
 The display record is now:
 

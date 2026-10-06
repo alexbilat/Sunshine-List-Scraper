@@ -61,6 +61,8 @@ flowchart TD
 
 The database practice module is absent from this diagram because the pipeline does
 not import or call it. There is no frontend or API server in the scraper yet.
+The new PostgreSQL foundation is also separate from this execution path; see
+[chapter 4](04-postgresql-architecture.md) for its intended integration boundary.
 
 ## File responsibilities
 
@@ -75,6 +77,7 @@ not import or call it. There is no frontend or API server in the scraper yet.
 | [reporting.py](../sunshine_scraper/reporting.py) | Summaries and charts | Receives already accepted records |
 | [errors.py](../sunshine_scraper/errors.py) | Define the shared `ScraperError` exception | Supplies an error type, not an error handler |
 | [database.py](../sunshine_scraper/database.py) | Standalone read-only SQL practice | Requires an existing database; not a storage integration |
+| [storage/](../sunshine_scraper/storage/) | Optional PostgreSQL model, connection, and read repository | No ingestion or automatic database I/O |
 | [__init__.py](../sunshine_scraper/__init__.py) | Identify/document the Python package | Does not run the scraper |
 | [requirements.txt](../requirements.txt) | List third-party dependencies | Requests, BeautifulSoup, and Matplotlib |
 | [tests/test_error_handling.py](../tests/test_error_handling.py) | Existing offline behaviour checks | HTTP and retry waits are mocked |

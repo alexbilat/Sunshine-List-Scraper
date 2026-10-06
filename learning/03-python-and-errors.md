@@ -159,9 +159,10 @@ this update check safe imports, missing-file protection, filtering/limit/order, 
 connection cleanup after an invalid schema. They do not prove live API coverage or
 database import functionality; neither requires a full live scrape.
 
-The repository currently ignores the `tests` directory, but tracked tests remain
-tracked. The new database test file is explicitly staged so it is included despite
-that existing ignore rule. We did not change your ignore preferences in this update.
+The `tests` directory is now available to version control so new PostgreSQL checks
+can travel with the code. Offline checks cover exact cents, content fingerprints,
+configuration, safe imports, and query input boundaries. Real PostgreSQL checks
+are opt-in; see [chapter 4](04-postgresql-architecture.md).
 
 ## Things to explain before making the database change
 

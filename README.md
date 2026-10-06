@@ -76,10 +76,33 @@ The [learning folder](learning/README.md) explains the app for users and contrib
 - [Full application flow and module responsibilities](learning/01-app-flow.md)
 - [Follow one resource link and disclosure](learning/02-follow-one-record.md)
 - [Python constructs, errors, logging, and tests](learning/03-python-and-errors.md)
-- [SQLite recommendation and database implementation plan](learning/04-database-next-step.md)
-- [Original refactor decisions and this update's changes](learning/05-architecture-and-changes.md)
+- [PostgreSQL foundation and architecture review](learning/04-postgresql-architecture.md)
 
 `sunshine_scraper/database.py` is a standalone read-only query practice module, not
 yet connected to the scraper. It requires an existing database/table. Running the
 scraper still writes TSV and charts; it does not create or populate `sunshine.db`.
 See the database chapter before running the practice query or adding persistence.
+
+## PostgreSQL foundation
+
+The new `sunshine_scraper/storage/` package provides an exact-money disclosure
+model, environment-based connection settings, and a parameterized read repository.
+`migrations/001_disclosure_foundation.sql` proposes three tables for disclosure
+contents, source resources, and their many-to-many provenance relationships.
+
+This is preparation for persistence: the normal scraper still exports files and
+does not call the database. The foundation does not yet ingest rows, apply
+corrections, schedule refreshes, or serve an API. Start with the
+[architecture review](learning/04-postgresql-architecture.md) for the design,
+limitations, optional setup, and decisions to make together.
+
+PostgreSQL support is optional (`requirements-postgres.txt`). Once a server and
+`SUNSHINE_DATABASE_URL` are configured, `python -m sunshine_scraper.storage check`
+checks connectivity. `python -m sunshine_scraper.storage top --year 2024 --limit 10`
+reads an already initialized/populated schema. Neither command creates tables or
+downloads data. Credentials belong in the environment; `.env` is ignored and
+`.env.example` is a reference, not an automatically loaded configuration file.
+
+The ordinary offline test command also checks the new model and repository.
+Real PostgreSQL tests are opt-in through `SUNSHINE_TEST_DATABASE_URL` pointing at
+a dedicated test database; otherwise they are skipped.
