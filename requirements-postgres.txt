@@ -1,0 +1,3 @@
+# Optional database tools; the normal scraper does not require PostgreSQL.
+-r requirements.txt
+psycopg[binary]>=3.2,<4

@@ -3,4 +3,7 @@ __pycache__/
 *.py[cod]
 docs
 sunshine_scraper\__pycache__
-tests
+# Database credentials are local configuration, never source code.
+.env
+.env.*
+!.env.example
