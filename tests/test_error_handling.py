@@ -22,9 +22,10 @@ import matplotlib
 # Use a noninteractive backend before importing reporting: save images without
 # opening chart windows, so these tests also work on machines without a display.
 matplotlib.use('Agg')
-from sunshine_scraper.client import request_page, fetch_all_records, discover_resource_links
+from sunshine_scraper.client import (request_page, fetch_all_records,
+                                    fetch_csv_records, discover_resource_links)
 from sunshine_scraper.errors import ScraperError
-from sunshine_scraper.processing import process_records
+from sunshine_scraper.processing import clean_record, process_records
 from sunshine_scraper.pipeline import run
 from sunshine_scraper.export import write_records
 from sunshine_scraper.reporting import create_charts
@@ -142,6 +143,90 @@ class RequestTests(unittest.TestCase):
         with self.assertRaises(ScraperError):
             discover_resource_links('page')
 
+    @patch('sunshine_scraper.client.request_page')
+    def test_discovery_includes_current_and_future_year_downloads(self, request):
+        """Mix old CKAN links with the English downloads for advertised new years."""
+        landing = Mock(content=b'''
+            <a href="https://data.ontario.ca/dataset/public-sector-salary-disclosure-2020/resource/old">old</a>
+            <a href="/public-sector-salary-disclosure/2021/all-sectors-and-seconded-employees/">main</a>
+            <a href="https://www.ontario.ca/public-sector-salary-disclosure/2021/all-sectors-and-seconded-employees?x=1">again</a>
+            <a href="/public-sector-salary-disclosure/2021/addendum/">changes</a>
+            <a href="/public-sector-salary-disclosure/2021/organizations-no-salaries-disclose/">organizations</a>
+            <a href="/public-sector-salary-disclosure/2026/all-sectors-and-seconded-employees/">future</a>
+        ''')
+        manifest = Mock()
+        manifest.json.return_value = {
+            '2021': {
+                'Compendium': {'en': {'csv': '/files/main/main.csv'},
+                               'fr': {'csv': '/files/french/main.csv'}},
+                'Addendum': {'en': {'csv': '/files/changes/addendum.csv'}},
+                'NoSalary': {'en': {'csv': '/files/organizations/no-salaries.csv'}},
+            },
+            '2026': {'Compendium': {'en': {'csv': '/files/future/main.csv'}}},
+            '2027': {'Compendium': {'en': {'csv': '/files/unadvertised/main.csv'}}},
+        }
+        request.side_effect = [landing, manifest]
+        links = discover_resource_links('https://www.ontario.ca/page/public-sector-salary-disclosure',
+                                        timeout=12, max_retries=0)
+        self.assertEqual(links, [
+            'https://data.ontario.ca/dataset/public-sector-salary-disclosure-2020/resource/old',
+            'https://www.ontario.ca/files/main/main.csv',
+            'https://www.ontario.ca/files/changes/addendum.csv',
+            'https://www.ontario.ca/files/future/main.csv',
+        ])
+        self.assertEqual(request.call_count, 2)
+        request.assert_called_with(
+            'https://www.ontario.ca/public-sector-salary-disclosure_artifacts/pssdfiles.json',
+            timeout=12, max_retries=0)
+
+    @patch('sunshine_scraper.client.request_page')
+    def test_missing_or_broken_manifest_does_not_silently_omit_a_year(self, request):
+        """A published modern year must resolve to a usable English CSV link."""
+        landing = Mock(content=b'<a href="/public-sector-salary-disclosure/2025/all-sectors-and-seconded-employees/">main</a>')
+        for payload in (None, [], {}, {'2025': None},
+                        {'2025': {'Compendium': {'en': {'csv': ''}}}},
+                        {'2025': {'Compendium': {'en': {'csv': '/file.html'}}}}):
+            with self.subTest(payload=payload):
+                manifest = Mock()
+                manifest.json.return_value = payload
+                request.side_effect = [landing, manifest]
+                with self.assertRaises(ScraperError):
+                    discover_resource_links('https://www.ontario.ca/page/public-sector-salary-disclosure')
+        manifest = Mock()
+        manifest.json.side_effect = ValueError('not JSON')
+        request.side_effect = [landing, manifest]
+        with self.assertRaisesRegex(ScraperError, 'manifest is not valid JSON'):
+            discover_resource_links('https://www.ontario.ca/page/public-sector-salary-disclosure')
+
+    @patch('sunshine_scraper.client.request_page')
+    def test_csv_download_preserves_quotes_commas_unicode_and_bom(self, request):
+        """Read Ontario-style CSV without splitting commas inside quoted fields."""
+        request.return_value.content = (
+            '\ufeffFirst name,Last name,Employer,Position,Salary,Year\r\n'
+            'Zo\u00eb,Bilat,"Ontario, Agency","Manager, \"\"Research\"\"",'
+            '"$123,456.78",2025\r\n'
+        ).encode('utf-8')
+        rows = fetch_csv_records('https://www.ontario.ca/files/new/data.csv', timeout=15)
+        self.assertEqual(len(rows), 1)
+        record, _ = clean_record(rows[0], 'new')
+        self.assertEqual(record['Name'], 'Zo\u00eb Bilat')
+        self.assertEqual(record['Employer'], 'Ontario, Agency')
+        self.assertEqual(record['Job Title'], 'Manager, "Research"')
+        self.assertEqual(record['Salary'], 123456.78)
+        request.assert_called_once_with('https://www.ontario.ca/files/new/data.csv', timeout=15)
+
+    @patch('sunshine_scraper.client.request_page')
+    def test_broken_csv_download_is_not_returned_as_a_partial_dataset(self, request):
+        header = b'First Name,Last Name,Employer,Salary,Year\n'
+        good_row = b'Alex,Bilat,Ontario,123456,2025\n'
+        for content in (b'', b'<html>Error</html>', b'Employer,Year\nOntario,2025\n',
+                        header + good_row + b'A,B,C,1,2025,extra\n',
+                        header + good_row + b'"unfinished', header + b'\xff'):
+            with self.subTest(content=content):
+                request.return_value.content = content
+                with self.assertRaises(ScraperError):
+                    fetch_csv_records('https://www.ontario.ca/files/new/data.csv')
+
 
 class ProcessingTests(unittest.TestCase):
     """Exercise row cleaning directly; no HTTP calls or output files are needed."""
@@ -175,6 +260,44 @@ class ProcessingTests(unittest.TestCase):
         self.assertEqual(rows[0]['Salary'], 150000)
         self.assertEqual(rows[0]['Year'], '2023')
         self.assertEqual(rows[0]['Job Title'], '')
+
+    def test_historical_column_names_keep_names_titles_and_years(self):
+        """Regression examples for the three main datasets previously rejected."""
+        examples = [
+            {'First Name': 'Alex', 'Surname': 'Bilat', 'Employer': 'Ontario',
+             'Position': 'Developer', 'Salary Paid': '$123,456.00', 'Calendar Year': '2001'},
+            {'First Name': 'Alex', 'Last name': 'Bilat', 'Employer': 'Ontario',
+             'Job title': 'Developer', 'Salary Paid': '$123,456.00', 'Calendar year': '2014'},
+            {'First name': 'Alex', 'Last name': 'Bilat', 'Employer': 'Ontario',
+             'Job title': 'Developer', 'Salary': '123456', 'Year': '2020'},
+            {' FIRST\xa0NAME ': 'Alex', '\ufeffLAST_NAME': 'Bilat', ' employer ': 'Ontario',
+             'JOB_TITLE': 'Developer', 'SALARY_PAID': '123456', 'calendar_year': '2025'},
+        ]
+        for example, expected_year in zip(examples, ('2001', '2014', '2020', '2025')):
+            with self.subTest(year=expected_year):
+                record, _ = clean_record(example, 'source')
+                self.assertEqual(record['Name'], 'Alex Bilat')
+                self.assertEqual(record['Job Title'], 'Developer')
+                self.assertEqual(record['Year'], expected_year)
+                self.assertEqual(record['Salary'], 123456)
+
+    def test_aliases_do_not_create_duplicate_disclosures(self):
+        rows, years, seen = [], {}, set()
+        process_records([person()], 'old', rows, years, seen)
+        alternative = {'first name': 'Alex', 'surname': 'Bilat', 'employer': 'Ontario',
+                       'position': 'Developer', 'salary': '123456', 'year': '2024'}
+        process_records([alternative], 'new', rows, years, seen)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(years, {'2024': [123456]})
+
+    def test_blank_preferred_columns_use_populated_aliases(self):
+        record, _ = clean_record(person(**{'Last Name': ' ', 'Surname': 'Bilat',
+            'Job Title': '', 'Position': 'Developer', 'Calendar Year': '\xa0',
+            'Year': '2024', 'Salary Paid': '', 'Salary': '123456'}), 'source')
+        self.assertEqual(record['Name'], 'Alex Bilat')
+        self.assertEqual(record['Job Title'], 'Developer')
+        self.assertEqual(record['Year'], '2024')
+        self.assertEqual(record['Salary'], 123456)
 
 
 class PipelineTests(unittest.TestCase):
@@ -239,6 +362,42 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(len(lines), 3)
             self.assertTrue(lines[1].startswith('Other Bilat\t200000.0'))
             charts.assert_called_once()
+
+    @patch('sunshine_scraper.pipeline.discover_resource_links')
+    @patch('sunshine_scraper.pipeline.fetch_all_records', return_value=[person()])
+    @patch('sunshine_scraper.pipeline.fetch_csv_records')
+    @patch('sunshine_scraper.pipeline.create_charts')
+    def test_current_csv_rows_join_historical_rows_in_the_export(self, charts, csv_fetch, fetch, discover):
+        """Both download methods reach the same cleaning, sorting, and TSV writer."""
+        csv_url = 'https://www.ontario.ca/files/2025/Compendium/new-id/current.csv?download=1'
+        discover.return_value = ['/resource/old-id', csv_url]
+        csv_fetch.return_value = [{'First name': 'Other', 'Last name': 'Bilat',
+            'Employer': 'Ontario', 'Position': 'Director', 'Salary': '200000', 'Year': '2025'}]
+        with tempfile.TemporaryDirectory() as directory:
+            import csv
+            output = Path(directory) / 'out.txt'
+            self.assertTrue(run('page', 'api', output, 'yearly.png', 'titles.png'))
+            with output.open(encoding='utf-8', newline='') as source:
+                rows = list(csv.DictReader(source, delimiter='\t'))
+            self.assertEqual([row['Year'] for row in rows], ['2025', '2024'])
+            self.assertEqual(rows[0]['UUID'], 'new-id')
+            self.assertEqual(rows[0]['Job Title'], 'Director')
+            self.assertEqual(rows[1]['UUID'], 'old-id')
+        fetch.assert_called_once_with('api', 'old-id', timeout=30, max_retries=2, backoff=1)
+        csv_fetch.assert_called_once_with(csv_url, timeout=30, max_retries=2, backoff=1)
+
+    @patch('sunshine_scraper.pipeline.discover_resource_links',
+           return_value=['/resource/old', 'https://www.ontario.ca/files/new/data.csv'])
+    @patch('sunshine_scraper.pipeline.fetch_all_records', return_value=[person()])
+    @patch('sunshine_scraper.pipeline.fetch_csv_records', side_effect=ScraperError('broken download'))
+    @patch('sunshine_scraper.pipeline.create_charts')
+    def test_failed_current_download_reports_an_incomplete_run(self, charts, csv_fetch, fetch, discover):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'out.txt'
+            with self.assertLogs('sunshine_scraper.pipeline', level='ERROR') as logs:
+                self.assertFalse(run('page', 'api', output, 'yearly.png', 'titles.png'))
+            self.assertEqual(len(output.read_text().splitlines()), 2)
+            self.assertIn('Incomplete run', ' '.join(logs.output))
 
     def test_tsv_quotes_embedded_delimiters(self):
         """A TSV-aware reader must recover tabs and quotes inside a field unchanged."""
