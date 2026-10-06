@@ -1,17 +1,34 @@
-"""Bounded HTTP retries and validation of Ontario CKAN responses."""
+"""Discover Ontario's CKAN resources and newer CSV downloads; validate requests."""
+import csv
+import io
 import logging
 import math
+import re
 import time
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import requests
 from bs4 import BeautifulSoup
 from .errors import ScraperError
+from .processing import FIELD_ALIASES, normalize_field_name
 
 logger = logging.getLogger(__name__)
 # Retry only failures that may clear up without changing the request.
 # 429 means rate limiting; the selected 5xx codes indicate server/gateway errors.
 RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+DOWNLOAD_MANIFEST_PATH = '/public-sector-salary-disclosure_artifacts/pssdfiles.json'
+MODERN_DISCLOSURE_PATH = re.compile(
+    r'^/public-sector-salary-disclosure/(\d{4})/'
+    r'(all-sectors-and-seconded-employees|addendum)/?$'
+)
+
+
+def resource_id_from_link(link):
+    """Identify a CKAN resource page or the UUID directory of a CSV download."""
+    parts = urlsplit(link).path.rstrip('/').split('/')
+    if parts[-1].lower().endswith('.csv'):
+        return parts[-2]
+    return parts[-1]
 
 
 def request_page(url, *, params=None, timeout=30, max_retries=2, backoff=1):
@@ -60,32 +77,92 @@ def request_page(url, *, params=None, timeout=30, max_retries=2, backoff=1):
 
 
 def discover_resource_links(url, **request_options):
-    """Find resource links once per ID while preserving source-page order.
+    """Find historical CKAN links and current English disclosure CSV downloads.
 
-    **request_options collects named options (such as timeout) into a dict.
-    Passing **request_options forwards them as named arguments to request_page.
+    The landing page links newer years to Ontario pages, not CKAN resources.
+    Resolve their main/addendum downloads through Ontario's official manifest.
+    Only advertised years are selected; no latest year or file UUID is hardcoded.
     """
     response = request_page(url, **request_options)
     soup = BeautifulSoup(response.content, 'html.parser')
     links = []
     seen = set()
+    modern_sources = []
     for link in soup.find_all('a', href=True):
-        href = link['href']
+        href = urljoin(url, link['href'])
+        modern_match = MODERN_DISCLOSURE_PATH.fullmatch(urlsplit(href).path)
+        if modern_match:
+            year, page_kind = modern_match.groups()
+            kind = 'Compendium' if page_kind == 'all-sectors-and-seconded-employees' else 'Addendum'
+            source = (year, kind)
+            if source not in modern_sources:
+                modern_sources.append(source)
+            continue
         lowercase_href = href.lower()
         if 'public-sector-salary-disclosure' not in lowercase_href or 'resource' not in lowercase_href:
             continue
         # Ignore query strings and trailing slashes when identifying a resource.
-        resource_path = urlsplit(href).path.rstrip('/')
-        resource_id = resource_path.split('/')[-1]
+        resource_id = resource_id_from_link(href)
         if resource_id in seen:
             logger.debug("Skipping repeated resource link: %s", resource_id)
             continue
         seen.add(resource_id)
         links.append(href)
+    if modern_sources:
+        manifest_url = urljoin(url, DOWNLOAD_MANIFEST_PATH)
+        response = request_page(manifest_url, **request_options)
+        try:
+            manifest = response.json()
+        except ValueError as error:
+            raise ScraperError("Ontario download manifest is not valid JSON") from error
+        if not isinstance(manifest, dict):
+            raise ScraperError("Ontario download manifest must be an object")
+        for year, kind in modern_sources:
+            try:
+                download_path = manifest[year][kind]['en']['csv']
+            except (KeyError, TypeError) as error:
+                raise ScraperError(f"Ontario download manifest is missing the English {year} {kind} CSV") from error
+            if not isinstance(download_path, str) or not download_path.strip():
+                raise ScraperError(f"Ontario download manifest has an invalid {year} {kind} CSV link")
+            download_url = urljoin(manifest_url, download_path)
+            parsed_url = urlsplit(download_url)
+            if parsed_url.scheme not in ('http', 'https') or not parsed_url.path.lower().endswith('.csv'):
+                raise ScraperError(f"Ontario download manifest has an invalid {year} {kind} CSV link")
+            resource_id = resource_id_from_link(download_url)
+            if resource_id not in seen:
+                seen.add(resource_id)
+                links.append(download_url)
     if not links:
         raise ScraperError("No disclosure resource links found; the source page may have changed")
     logger.info("Discovered %s resources", len(links))
     return links
+
+
+def fetch_csv_records(url, **request_options):
+    """Read a complete English disclosure CSV, including quoted commas and BOMs.
+
+    As with CKAN collection, a broken download raises instead of returning a
+    partial dataset. Individual missing values are handled by row processing.
+    """
+    response = request_page(url, **request_options)
+    try:
+        text = response.content.decode('utf-8-sig')
+        reader = csv.DictReader(io.StringIO(text, newline=''), strict=True)
+        columns = {normalize_field_name(name) for name in (reader.fieldnames or [])}
+        required_fields = ('first_name', 'last_name', 'employer', 'year', 'salary')
+        missing = [name for name in required_fields
+                   if not columns.intersection(FIELD_ALIASES[name])]
+        if missing:
+            raise ScraperError(f"CSV {url} is missing disclosure columns: {', '.join(missing)}")
+        records = []
+        for row in reader:
+            if None in row:
+                raise ScraperError(f"CSV {url}, line {reader.line_num}: more values than column headers")
+            records.append(row)
+        logger.debug("CSV %s: fetched %s rows", url, len(records))
+        return records
+    except (UnicodeError, csv.Error, ValueError) as error:
+        raise ScraperError(f"CSV {url} could not be read: {error}") from error
 
 
 def fetch_all_records(api_url, resource_id, *, page_size=100000, **request_options):
