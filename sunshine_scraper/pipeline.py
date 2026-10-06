@@ -1,7 +1,8 @@
 """Coordinate collection; explicitly report incomplete runs."""
 import logging
 from urllib.parse import urlsplit
-from .client import discover_resource_links, fetch_all_records
+from .client import (discover_resource_links, fetch_all_records, fetch_csv_records,
+                     resource_id_from_link)
 from .errors import ScraperError
 from .processing import process_records
 from .export import write_records
@@ -27,10 +28,12 @@ def run(url, api_url, output_path, yearly_chart_path, titles_chart_path,
     seen_records = set()
     failed_resources = []
     for link in resource_links:
-        resource_path = urlsplit(link).path.rstrip('/')
-        resource_id = resource_path.split('/')[-1]
+        resource_id = resource_id_from_link(link)
         try:
-            records = fetch_all_records(api_url, resource_id, **options)
+            if urlsplit(link).path.lower().endswith('.csv'):
+                records = fetch_csv_records(link, **options)
+            else:
+                records = fetch_all_records(api_url, resource_id, **options)
         except ScraperError as error:
             # A failed resource must not prevent collecting the remaining ones.
             logger.error("Skipping failed dataset: %s", error)
