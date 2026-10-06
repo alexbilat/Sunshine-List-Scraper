@@ -9,6 +9,33 @@ from collections import Counter
 
 logger = logging.getLogger(__name__)
 
+# Column labels changed between Ontario's yearly publications. These aliases
+# describe the same information, in order of preference when both are present.
+FIELD_ALIASES = {
+    'first_name': ('first name',),
+    'last_name': ('last name', 'surname'),
+    'job_title': ('job title', 'position'),
+    'employer': ('employer',),
+    'year': ('calendar year', 'year'),
+    'salary': ('salary paid', 'salary'),
+}
+
+
+def normalize_field_name(name):
+    """Match column labels despite capitals, underscores, spaces, or a BOM."""
+    if not isinstance(name, str):
+        raise ValueError("column name must be text")
+    return ' '.join(name.lstrip('\ufeff').replace('_', ' ').split()).casefold()
+
+
+def get_record_field(fields, name):
+    """Read the first nonempty alias from a dictionary of normalized columns."""
+    for alias in FIELD_ALIASES[name]:
+        value = fields.get(alias)
+        if value is not None and (not isinstance(value, str) or value.strip()):
+            return value
+    return None
+
 
 def normalize_text(value):
     """Return plain text with repeated whitespace collapsed.
@@ -35,31 +62,19 @@ def clean_record(person, resource_id):
     if not isinstance(person, dict):
         raise ValueError("row is not an object")
 
-    first_name = normalize_text(person.get('First Name'))
-    last_name = normalize_text(person.get('Last Name'))
-    job_title = normalize_text(person.get('Job Title'))
-    employer = normalize_text(person.get('Employer'))
+    fields = {normalize_field_name(name): value for name, value in person.items()}
+    first_name = normalize_text(get_record_field(fields, 'first_name'))
+    last_name = normalize_text(get_record_field(fields, 'last_name'))
+    job_title = normalize_text(get_record_field(fields, 'job_title'))
+    employer = normalize_text(get_record_field(fields, 'employer'))
     if not first_name or not last_name or not employer:
         raise ValueError("missing first name, last name, or employer")
 
-    # Ontario uses different year column names in different datasets.
-    # Keep the same priority: the first value that is neither None nor '' wins.
-    year_fields = ('Calendar Year', 'Year', 'Calendar year', 'calendar_year')
-    raw_year = None
-    for field_name in year_fields:
-        value = person.get(field_name)
-        if value is not None and value != '':
-            raw_year = value
-            break
-
-    year = normalize_text(raw_year)
+    year = normalize_text(get_record_field(fields, 'year'))
     if len(year) != 4 or not year.isascii() or not year.isdigit():
         raise ValueError("missing or invalid four-digit year")
 
-    raw_salary = person.get('Salary Paid')
-    if raw_salary is None:
-        raw_salary = person.get('Salary')
-    salary_text = normalize_text(raw_salary)
+    salary_text = normalize_text(get_record_field(fields, 'salary'))
     salary_text = salary_text.replace('$', '').replace(',', '')
     salary = float(salary_text)  # Invalid numbers raise ValueError for the caller.
     if not math.isfinite(salary) or salary < 0:
