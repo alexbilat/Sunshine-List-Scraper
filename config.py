@@ -2,7 +2,8 @@
 
 Relative output paths are resolved from the directory where you run Python.
 """
-# Discovery reads the webpage; record downloads use the separate CKAN API.
+# Discovery reads Ontario's webpage and download list. Historical records use
+# CKAN; newer years use Ontario's official English CSV downloads.
 url = 'https://www.ontario.ca/page/public-sector-salary-disclosure'
 api_url = 'https://data.ontario.ca/api/3/action/datastore_search'
 
