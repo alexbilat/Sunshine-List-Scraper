@@ -2,15 +2,15 @@
 
 A Python script that pulls every public record from the [Ontario Public Sector Salary Disclosure](https://www.ontario.ca/page/public-sector-salary-disclosure) ("Sunshine List") - every public employee in Ontario who earned over $100,000 in a given year - and turns it into a clean, deduplicated dataset with summary charts.
 
-Instead of scraping rendered HTML tables, the script crawls the disclosure page for resource links, then queries Ontario's [CKAN open data API](https://data.ontario.ca/api/3/action/datastore_search) directly using each dataset's UUID.
+Instead of scraping rendered HTML tables, the script finds the datasets linked on Ontario's disclosure page. Historical resources are read through Ontario's [CKAN open data API](https://data.ontario.ca/api/3/action/datastore_search); newer years are downloaded as English CSV files using Ontario's [official download list](https://www.ontario.ca/public-sector-salary-disclosure_artifacts/pssdfiles.json).
 
 ## What it does
 
-1. **Finds every dataset.** Scrapes the Sunshine List page with BeautifulSoup to collect the resource links for each year's dataset, then extracts each dataset's UUID from its URL.
-2. **Pulls every record.** Ontario's CKAN API caps a single request at 100,000 records. The script works around this with offset-based pagination, requesting in batches of 100,000 until a dataset is exhausted.
+1. **Finds the published datasets.** Collects historical CKAN resource links and resolves newer main-list/addendum pages to their English CSV downloads. New years are included when Ontario adds them to the disclosure page and download list; the latest year and file addresses are not hardcoded.
+2. **Downloads the records.** Requests CKAN resources in batches of 100,000 until exhausted and reads complete CSV downloads for newer years. A missing advertised CSV or malformed download is reported as a failure instead of silently omitting that year.
 3. **Cleans the data.**
    - Normalizes salary fields (strips `$` and `,`, handles missing or malformed values).
-   - Reconciles inconsistent column names across dataset years (`Calendar Year` vs `Year` vs `calendar_year`, etc.).
+   - Matches column labels despite capitalization, extra spaces, or underscores, and recognizes aliases such as `Surname`/`Last Name`, `Position`/`Job Title`, `Salary Paid`/`Salary`, and `Calendar Year`/`Year`.
    - Strips non-breaking spaces and collapses irregular whitespace in names, titles, and employers.
    - Filters out non-person records that occasionally show up in the raw data.
 4. **Deduplicates across datasets.** Some records appear more than once across different UUIDs. The script builds a composite key (name, title, employer, year, salary) to catch and skip duplicates.
@@ -55,6 +55,19 @@ Run offline checks:
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+## Data coverage fixes
+
+Ontario moved newer years (currently 2021 onward) to disclosure pages whose links
+do not contain a CKAN resource UUID. Discovery now resolves those pages through
+Ontario's download list and reads the corresponding English main and addendum
+CSVs. The output's `UUID` column uses the download's UUID directory for these files.
+
+The row reader also recognizes the historical column labels that previously
+caused the 2001, 2014, and 2020 main datasets, and several addenda, to be rejected.
+Alternative title labels are preserved instead of appearing as blank job titles.
+The existing row validity and duplicate rules still apply. These changes do not
+apply addendum change/deletion actions; correction handling remains a separate issue.
 
 ## Learn the code before adding a database
 
