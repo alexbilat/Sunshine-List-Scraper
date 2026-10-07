@@ -36,6 +36,7 @@ def create_charts(names_list, yearly_salary_dict, yearly_chart_path, titles_char
     figure, count_axis = plt.subplots(figsize=(14, 6))
     count_axis.bar(years_sorted, counts, color='steelblue', alpha=0.4, label='# of People')
     count_axis.set_ylabel('Number of People', color='steelblue')
+    count_axis.yaxis.set_major_locator(mticker.MaxNLocator(integer=True))
     count_axis.tick_params(axis='x', rotation=45)
 
     # Headcount and salary have different units. twinx shares the horizontal
@@ -80,6 +81,7 @@ def create_charts(names_list, yearly_salary_dict, yearly_chart_path, titles_char
     figure, title_axis = plt.subplots(figsize=(12, 6))
     title_axis.barh(labels, values, color='teal')
     title_axis.set_xlabel('Number of Appearances')
+    title_axis.xaxis.set_major_locator(mticker.MaxNLocator(integer=True))
     title_axis.set_title('Top 10 Most Common Job Titles on the Sunshine List')
     figure.tight_layout()
     try:
