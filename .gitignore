@@ -7,3 +7,8 @@ sunshine_scraper\__pycache__
 .env
 .env.*
 !.env.example
+
+# Default scraper outputs can be regenerated; keep curated examples tracked.
+/output.txt
+/chart_yearly.png
+/chart_titles.png
