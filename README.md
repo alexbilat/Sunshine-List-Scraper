@@ -38,6 +38,23 @@ This will:
 - Save `chart_yearly.png` and `chart_titles.png` in the working directory
 
 
+## Reading the exported records
+
+`output.txt` is a UTF-8, tab-separated file with a header row. In a spreadsheet
+import dialog, choose UTF-8 encoding and a tab delimiter. Use a TSV-aware reader
+to preserve quoted tabs or newlines inside fields:
+
+```python
+import csv
+
+with open('output.txt', encoding='utf-8', newline='') as source:
+    for record in csv.DictReader(source, delimiter='\t'):
+        print(record['Name'], record['Salary'])
+```
+
+The columns are `Name`, `Salary`, `Job Title`, `Employer`, `Year`, and `UUID`.
+`Salary` is expressed in dollars; `UUID` identifies the source resource.
+
 ## Project structure
 
 The entry point is `Sunshine_List_Scaper.py`; edit URLs and output paths in `config.py`. Collection, processing, export, reporting, and coordination live in the `sunshine_scraper/` package. Start with [the application learning guide](learning/README.md) for the complete execution flow, a record-by-record walkthrough, Python explanations, architectural decisions, and the next database step.
