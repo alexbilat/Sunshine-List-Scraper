@@ -12,3 +12,9 @@ sunshine_scraper\__pycache__
 /output.txt
 /chart_yearly.png
 /chart_titles.png
+
+# Local SQLite practice database and its temporary sidecar files.
+/sunshine.db
+/sunshine.db-journal
+/sunshine.db-wal
+/sunshine.db-shm
