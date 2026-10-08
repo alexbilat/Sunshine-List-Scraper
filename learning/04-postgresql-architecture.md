@@ -107,8 +107,10 @@ These indexes have storage and write costs; add more after measuring real querie
 The current export path converts salary to a binary float. The new adapter instead
 parses the raw source salary with `Decimal`, requires whole cents, checks the
 PostgreSQL `BIGINT` bound, and stores integer cents. For example, `$123,456.78`
-becomes `12345678`. Inputs containing fractional cents are rejected rather than
-rounded. Direct float input is rejected because its original precision is unknown.
+becomes `12345678`. A few 2021-2023 rows publish fractions of a cent (e.g.
+`111259.878`); these are rounded half-up to the nearest cent from the exact
+`Decimal`, never through a float. Direct float input is rejected because its
+original precision is unknown.
 
 Both paths share the same field aliases and whitespace normalizers. The database
 adapter additionally preserves first/last-name boundaries and exact money. It must
