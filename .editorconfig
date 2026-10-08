@@ -12,3 +12,7 @@ indent_size = 4
 [*.md]
 # Two trailing spaces can represent an intentional Markdown line break.
 trim_trailing_whitespace = false
+
+[*.sql]
+indent_style = space
+indent_size = 4
