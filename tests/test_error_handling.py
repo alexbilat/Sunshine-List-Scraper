@@ -9,26 +9,34 @@ can raise an exception or supply successive outcomes from a list. patch replaces
 an object temporarily and restores it when the decorated test/context ends.
 Patch the name used by the module under test, so its calls use the replacement.
 
-Network access and retry sleeps are replaced. Some tests still exercise real
-TSV writing and PNG generation, using automatically cleaned temporary folders.
+Network access, retry sleeps, and the database are replaced. Some tests still
+exercise real TSV writing and PNG generation, using temporary folders.
+Real-database behaviour is covered by tests/test_postgres_integration.py.
 """
+from contextlib import contextmanager
+from decimal import Decimal
 import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 import requests
 import matplotlib
 # Use a noninteractive backend before importing reporting: save images without
 # opening chart windows, so these tests also work on machines without a display.
 matplotlib.use('Agg')
-from sunshine_scraper.client import (request_page, fetch_all_records,
-                                    fetch_csv_records, discover_resource_links)
+from sunshine_scraper.client import (request_page, fetch_all_records, fetch_csv_download,
+                                    fetch_csv_records, fetch_ckan_resource_version,
+                                    discover_resource_links)
 from sunshine_scraper.errors import ScraperError
-from sunshine_scraper.processing import clean_record, process_records
 from sunshine_scraper.pipeline import run
 from sunshine_scraper.export import write_records
 from sunshine_scraper.reporting import create_charts
+from sunshine_scraper.storage.connection import (DatabaseAccessError,
+                                                DatabaseConfigurationError, DatabaseSettings)
+from sunshine_scraper.storage.migrations import MigrationError
+from sunshine_scraper.storage.models import Disclosure, TitleCount, YearSummary
+from sunshine_scraper.sync import SyncResult
 
 
 def response(status=200, records=None):
@@ -208,11 +216,11 @@ class RequestTests(unittest.TestCase):
         ).encode('utf-8')
         rows = fetch_csv_records('https://www.ontario.ca/files/new/data.csv', timeout=15)
         self.assertEqual(len(rows), 1)
-        record, _ = clean_record(rows[0], 'new')
-        self.assertEqual(record['Name'], 'Zo\u00eb Bilat')
-        self.assertEqual(record['Employer'], 'Ontario, Agency')
-        self.assertEqual(record['Job Title'], 'Manager, "Research"')
-        self.assertEqual(record['Salary'], 123456.78)
+        disclosure = Disclosure.from_source_row(rows[0])
+        self.assertEqual((disclosure.first_name, disclosure.last_name), ('Zo\u00eb', 'Bilat'))
+        self.assertEqual(disclosure.employer, 'Ontario, Agency')
+        self.assertEqual(disclosure.job_title, 'Manager, "Research"')
+        self.assertEqual(disclosure.salary_cents, 12345678)
         request.assert_called_once_with('https://www.ontario.ca/files/new/data.csv', timeout=15)
 
     @patch('sunshine_scraper.client.request_page')
@@ -228,176 +236,183 @@ class RequestTests(unittest.TestCase):
                     fetch_csv_records('https://www.ontario.ca/files/new/data.csv')
 
 
-class ProcessingTests(unittest.TestCase):
-    """Exercise row cleaning directly; no HTTP calls or output files are needed."""
+    @patch('sunshine_scraper.client.time.sleep')
+    @patch('sunshine_scraper.client.requests.get')
+    def test_304_is_accepted_only_when_requested(self, get, sleep):
+        """A conditional request may answer 304; any other request treats it as an error."""
+        get.return_value = response(304)
+        with self.assertRaises(ScraperError):
+            request_page('url')
+        self.assertEqual(request_page('url', not_modified_ok=True).status_code, 304)
 
-    def test_invalid_rows_and_duplicates(self):
-        """Bad rows and cross-resource duplicates must not enter records or salary totals."""
-        # Mirror pipeline state: accepted records, salaries by year, duplicate keys.
-        rows, years, seen = [], {}, set()
-        # Cover wrong row types, missing identity/year fields, and unusable salaries.
-        bad = [None, [], 'row', {}, person(**{'First Name': None}),
-               person(**{'Employer': {}}), person(**{'Salary Paid': 'NaN'}),
-               person(**{'Salary Paid': 'inf'}), person(**{'Salary Paid': '-1'}),
-               person(**{'Salary Paid': None}), person(**{'Calendar Year': 'unknown'})]
-        with self.assertLogs('sunshine_scraper.processing', level='INFO') as logs:
-            # *bad expands its items into this list, alongside one valid person.
-            self.assertEqual(process_records([person(), *bad], 'a', rows, years, seen), (1, len(bad)))
-            # Reuse the SAME collections for resource b to test cross-resource dedup.
-            self.assertEqual(process_records([person(**{'First Name': 'alex'})], 'b', rows, years, seen), (0, 0))
-        self.assertIn('1 duplicates', ' '.join(logs.output))
-        self.assertEqual(rows[0]['Name'], 'Alex Bilat')
-        # The first accepted occurrence keeps its source ID; no double-counting.
-        self.assertEqual(rows[0]['UUID'], 'a')
-        self.assertEqual(years, {'2024': [123456.0]})
+    @patch('sunshine_scraper.client.request_page')
+    def test_conditional_csv_download(self, request):
+        """Stored validators are sent; 304 returns None; 200 returns new validators."""
+        request.return_value = Mock(status_code=304)
+        self.assertIsNone(fetch_csv_download('https://x.test/a.csv', etag='"v1"',
+                                             last_modified='Mon, 23 Mar 2026 14:45:50 GMT'))
+        self.assertEqual(request.call_args.kwargs['headers'],
+                         {'If-None-Match': '"v1"',
+                          'If-Modified-Since': 'Mon, 23 Mar 2026 14:45:50 GMT'})
+        content = b'First Name,Last Name,Employer,Salary,Year\nAlex,Bilat,Ontario,123456,2025\n'
+        request.return_value = Mock(status_code=200, content=content,
+                                    headers={'ETag': '"v2"', 'Last-Modified': 'later'})
+        download = fetch_csv_download('https://x.test/a.csv')
+        self.assertIsNone(request.call_args.kwargs['headers'])
+        self.assertEqual(len(download.records), 1)
+        self.assertEqual((download.etag, download.last_modified), ('"v2"', 'later'))
+        self.assertEqual(len(download.content_sha256), 64)
 
-    def test_fallback_fields_and_optional_title(self):
-        """Alternate year/salary fields work, and an absent job title remains optional."""
-        # Mirror pipeline state: accepted records, salaries by year, duplicate keys.
-        rows, years, seen = [], {}, set()
-        process_records([person(**{'Calendar Year': None, 'Year': 2023,
-            'Salary Paid': None, 'Salary': '150000', 'Job Title': None})], 'a', rows, years, seen)
-        self.assertEqual(rows[0]['Salary'], 150000)
-        self.assertEqual(rows[0]['Year'], '2023')
-        self.assertEqual(rows[0]['Job Title'], '')
+    @patch('sunshine_scraper.client.request_page')
+    def test_ckan_version_uses_resource_show(self, request):
+        """CKAN's own modification time is read from resource_show, beside datastore_search."""
+        request.return_value.json.return_value = {
+            'success': True, 'result': {'last_modified': '2023-06-15T20:38:17',
+                                        'metadata_modified': '2023-07-03T16:47:19'}}
+        version = fetch_ckan_resource_version(
+            'https://data.ontario.ca/api/3/action/datastore_search', 'abc')
+        self.assertEqual(version, '2023-06-15T20:38:17')
+        self.assertEqual(request.call_args.args[0],
+                         'https://data.ontario.ca/api/3/action/resource_show')
+        # metadata_modified is the fallback when last_modified is missing.
+        request.return_value.json.return_value = {
+            'success': True, 'result': {'last_modified': None, 'metadata_modified': 'm'}}
+        self.assertEqual(fetch_ckan_resource_version('https://x.test/action/datastore_search', 'a'), 'm')
+        for payload in (None, {'success': False}, {'success': True, 'result': []}):
+            request.return_value.json.return_value = payload
+            with self.assertRaises(ScraperError):
+                fetch_ckan_resource_version('https://x.test/action/datastore_search', 'a')
 
-    def test_historical_column_names_keep_names_titles_and_years(self):
-        """Regression examples for the three main datasets previously rejected."""
-        examples = [
-            {'First Name': 'Alex', 'Surname': 'Bilat', 'Employer': 'Ontario',
-             'Position': 'Developer', 'Salary Paid': '$123,456.00', 'Calendar Year': '2001'},
-            {'First Name': 'Alex', 'Last name': 'Bilat', 'Employer': 'Ontario',
-             'Job title': 'Developer', 'Salary Paid': '$123,456.00', 'Calendar year': '2014'},
-            {'First name': 'Alex', 'Last name': 'Bilat', 'Employer': 'Ontario',
-             'Job title': 'Developer', 'Salary': '123456', 'Year': '2020'},
-            {' FIRST\xa0NAME ': 'Alex', '\ufeffLAST_NAME': 'Bilat', ' employer ': 'Ontario',
-             'JOB_TITLE': 'Developer', 'SALARY_PAID': '123456', 'calendar_year': '2025'},
-        ]
-        for example, expected_year in zip(examples, ('2001', '2014', '2020', '2025')):
-            with self.subTest(year=expected_year):
-                record, _ = clean_record(example, 'source')
-                self.assertEqual(record['Name'], 'Alex Bilat')
-                self.assertEqual(record['Job Title'], 'Developer')
-                self.assertEqual(record['Year'], expected_year)
-                self.assertEqual(record['Salary'], 123456)
 
-    def test_aliases_do_not_create_duplicate_disclosures(self):
-        rows, years, seen = [], {}, set()
-        process_records([person()], 'old', rows, years, seen)
-        alternative = {'first name': 'Alex', 'surname': 'Bilat', 'employer': 'Ontario',
-                       'position': 'Developer', 'salary': '123456', 'year': '2024'}
-        process_records([alternative], 'new', rows, years, seen)
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(years, {'2024': [123456]})
+class FakeReader:
+    """Stands in for PostgresSalaryRepository with fixed query results."""
 
-    def test_blank_preferred_columns_use_populated_aliases(self):
-        record, _ = clean_record(person(**{'Last Name': ' ', 'Surname': 'Bilat',
-            'Job Title': '', 'Position': 'Developer', 'Calendar Year': '\xa0',
-            'Year': '2024', 'Salary Paid': '', 'Salary': '123456'}), 'source')
-        self.assertEqual(record['Name'], 'Alex Bilat')
-        self.assertEqual(record['Job Title'], 'Developer')
-        self.assertEqual(record['Year'], '2024')
-        self.assertEqual(record['Salary'], 123456)
+    def __init__(self, records):
+        self.records = records
+
+    def count_records(self):
+        return len(self.records)
+
+    def iter_export_records(self):
+        yield from self.records
+
+    def yearly_summary(self):
+        return [YearSummary(2024, len(self.records), Decimal('12345600'))] if self.records else []
+
+    def top_job_titles(self, limit):
+        return [TitleCount('Developer', len(self.records))] if self.records else []
+
+
+def export_row(name='Alex Bilat', salary='123456.00', uuid='a'):
+    """One row as the repository's export query yields it."""
+    return {'Name': name, 'Salary': salary, 'Job Title': 'Developer',
+            'Employer': 'Ontario', 'Year': 2024, 'UUID': uuid}
+
+
+SETTINGS = DatabaseSettings('postgresql://user@localhost/test')
 
 
 class PipelineTests(unittest.TestCase):
-    """Exercise coordination and output protection using synthetic datasets."""
+    """Exercise coordination and output protection with a fake database."""
 
-    @patch('sunshine_scraper.pipeline.discover_resource_links', return_value=['/a', '/b'])
-    @patch('sunshine_scraper.pipeline.fetch_all_records')
-    def test_partial_run_exports_and_returns_failure(self, fetch, discover):
-        """One failed dataset still allows export from another, but the run is incomplete."""
-        # Resource a fails; resource b supplies one valid record.
-        fetch.side_effect = [ScraperError('offline'), [person()]]
-        # Real file operations stay inside a scratch directory, deleted on exit.
+    def setUp(self):
+        # A MagicMock connection supports "with connection.transaction():".
+        self.connection = MagicMock()
+
+        @contextmanager
+        def fake_open_connection(settings, autocommit=False):
+            yield self.connection
+
+        for target, replacement in [
+                ('sunshine_scraper.pipeline.open_connection', fake_open_connection),
+                ('sunshine_scraper.pipeline.ensure_schema_current', Mock())]:
+            patcher = patch(target, replacement)
+            patcher.start()
+            # addCleanup restores the original even if the test fails.
+            self.addCleanup(patcher.stop)
+
+    def run_with(self, sync_result, records, directory, charts=None):
+        """Run the pipeline with a fixed sync outcome and fixed database rows."""
+        paths = [Path(directory) / name for name in ('output.txt', 'yearly.png', 'titles.png')]
+        with patch('sunshine_scraper.pipeline.run_sync', return_value=sync_result) as sync, \
+                patch('sunshine_scraper.pipeline.PostgresSalaryRepository',
+                      return_value=FakeReader(records)), \
+                patch('sunshine_scraper.pipeline.create_charts', charts or Mock()):
+            result = run('page', 'api', *paths, settings=SETTINGS)
+        return result, paths, sync
+
+    def test_partial_run_exports_and_returns_failure(self):
+        """One failed dataset still allows export from the database, but the run is incomplete."""
+        partial = SyncResult('partial', 1, 2, loaded=['b'], failed=['a'])
         with tempfile.TemporaryDirectory() as directory:
-            paths = [Path(directory) / name for name in ('output.txt', 'yearly.png', 'titles.png')]
             with self.assertLogs('sunshine_scraper.pipeline', level='INFO') as logs:
-                # *paths expands the TSV and two chart paths as positional arguments.
-                self.assertFalse(run('page', 'api', *paths))
-            self.assertTrue(all(path.stat().st_size > 0 for path in paths))
+                result, paths, _ = self.run_with(partial, [export_row()], directory)
+            self.assertFalse(result)
             self.assertIn('Incomplete run', ' '.join(logs.output))
-            # Header plus the one accepted person; chart existence is checked above.
-            self.assertEqual(len(paths[0].read_text().splitlines()), 2)
+            # Header plus the one stored record.
+            self.assertEqual(len(paths[0].read_text(encoding='utf-8').splitlines()), 2)
 
-    @patch('sunshine_scraper.pipeline.discover_resource_links', return_value=['/a'])
-    @patch('sunshine_scraper.pipeline.fetch_all_records', return_value=[])
-    def test_empty_run_preserves_output(self, fetch, discover):
-        """An empty collection must not replace an existing output file."""
-        # Real file operations stay inside a scratch directory, deleted on exit.
+    def test_empty_database_preserves_output(self):
+        """An empty database must not replace an existing output file."""
         with tempfile.TemporaryDirectory() as directory:
-            # Seed an earlier export so preservation can be checked after failure.
-            output = Path(directory) / 'out.txt'; output.write_text('old')
+            output = Path(directory) / 'output.txt'; output.write_text('old')
             with self.assertRaises(ScraperError):
-                run('page', 'api', output, 'yearly.png', 'titles.png')
+                self.run_with(SyncResult('failed', 1, 1, failed=['a']), [], directory)
             self.assertEqual(output.read_text(), 'old')
 
-    @patch('sunshine_scraper.pipeline.discover_resource_links', return_value=['/a'])
-    @patch('sunshine_scraper.pipeline.fetch_all_records', return_value=[person()])
-    @patch('sunshine_scraper.pipeline.create_charts', side_effect=OSError('denied'))
-    def test_chart_failure_keeps_tsv(self, charts, fetch, discover):
+    def test_chart_failure_keeps_tsv(self):
         """A chart error reports failure while retaining the already-written TSV."""
-        # Real file operations stay inside a scratch directory, deleted on exit.
         with tempfile.TemporaryDirectory() as directory:
-            output = Path(directory) / 'out.txt'
-            self.assertFalse(run('page', 'api', output, 'yearly.png', 'titles.png'))
-            # TSV writing happens before chart generation, so this file survives.
-            self.assertTrue(output.exists())
+            result, paths, _ = self.run_with(SyncResult('succeeded', 1, 1, loaded=['a']),
+                                             [export_row()], directory,
+                                             charts=Mock(side_effect=OSError('denied')))
+            self.assertFalse(result)
+            self.assertTrue(paths[0].exists())
 
-    @patch('sunshine_scraper.pipeline.discover_resource_links', return_value=['/a', '/b'])
-    @patch('sunshine_scraper.pipeline.fetch_all_records')
-    @patch('sunshine_scraper.pipeline.create_charts')
-    def test_complete_run_sorts_and_deduplicates(self, charts, fetch, discover):
-        """A successful run merges resources, removes duplicates, and sorts salaries."""
-        # Two resources share one person; the second also has a higher salary.
-        # Chart generation is mocked here to focus on coordination and TSV contents.
-        fetch.side_effect = [[person()], [person(), person(**{'First Name': 'Other', 'Salary Paid': '200000'})]]
-        # Real file operations stay inside a scratch directory, deleted on exit.
+    def test_complete_run_exports_database_rows_in_order(self):
+        """The TSV is exactly what the database returns, in its salary order."""
+        import csv
+        charts = Mock()
+        rows = [export_row('Other Bilat', '200000.00', 'b'), export_row()]
         with tempfile.TemporaryDirectory() as directory:
-            output = Path(directory) / 'out.txt'
-            self.assertTrue(run('page', 'api', output, 'yearly.png', 'titles.png'))
-            lines = output.read_text().splitlines()
-            self.assertEqual(lines[0], 'Name\tSalary\tJob Title\tEmployer\tYear\tUUID')
-            # Header plus TWO unique people, with the higher salary first.
-            self.assertEqual(len(lines), 3)
-            self.assertTrue(lines[1].startswith('Other Bilat\t200000.0'))
-            charts.assert_called_once()
+            result, paths, sync = self.run_with(SyncResult('succeeded', 1, 2, loaded=['a', 'b']),
+                                                rows, directory, charts=charts)
+            self.assertTrue(result)
+            with paths[0].open(encoding='utf-8', newline='') as source:
+                exported = list(csv.DictReader(source, delimiter='\t'))
+        self.assertEqual([row['Salary'] for row in exported], ['200000.00', '123456.00'])
+        self.assertEqual(exported[0]['UUID'], 'b')
+        self.assertEqual(sync.call_args.kwargs['full_refresh'], False)
+        charts.assert_called_once()
 
-    @patch('sunshine_scraper.pipeline.discover_resource_links')
-    @patch('sunshine_scraper.pipeline.fetch_all_records', return_value=[person()])
-    @patch('sunshine_scraper.pipeline.fetch_csv_records')
-    @patch('sunshine_scraper.pipeline.create_charts')
-    def test_current_csv_rows_join_historical_rows_in_the_export(self, charts, csv_fetch, fetch, discover):
-        """Both download methods reach the same cleaning, sorting, and TSV writer."""
-        csv_url = 'https://www.ontario.ca/files/2025/Compendium/new-id/current.csv?download=1'
-        discover.return_value = ['/resource/old-id', csv_url]
-        csv_fetch.return_value = [{'First name': 'Other', 'Last name': 'Bilat',
-            'Employer': 'Ontario', 'Position': 'Director', 'Salary': '200000', 'Year': '2025'}]
+    def test_unchanged_sources_still_count_as_complete(self):
+        """Skipping a dataset Ontario has not changed is success, not a gap."""
         with tempfile.TemporaryDirectory() as directory:
-            import csv
-            output = Path(directory) / 'out.txt'
-            self.assertTrue(run('page', 'api', output, 'yearly.png', 'titles.png'))
-            with output.open(encoding='utf-8', newline='') as source:
-                rows = list(csv.DictReader(source, delimiter='\t'))
-            self.assertEqual([row['Year'] for row in rows], ['2025', '2024'])
-            self.assertEqual(rows[0]['UUID'], 'new-id')
-            self.assertEqual(rows[0]['Job Title'], 'Director')
-            self.assertEqual(rows[1]['UUID'], 'old-id')
-        fetch.assert_called_once_with('api', 'old-id', timeout=30, max_retries=2, backoff=1)
-        csv_fetch.assert_called_once_with(csv_url, timeout=30, max_retries=2, backoff=1)
+            result, _, _ = self.run_with(SyncResult('succeeded', 1, 1, unchanged=['a']),
+                                         [export_row()], directory)
+            self.assertTrue(result)
 
-    @patch('sunshine_scraper.pipeline.discover_resource_links',
-           return_value=['/resource/old', 'https://www.ontario.ca/files/new/data.csv'])
-    @patch('sunshine_scraper.pipeline.fetch_all_records', return_value=[person()])
-    @patch('sunshine_scraper.pipeline.fetch_csv_records', side_effect=ScraperError('broken download'))
-    @patch('sunshine_scraper.pipeline.create_charts')
-    def test_failed_current_download_reports_an_incomplete_run(self, charts, csv_fetch, fetch, discover):
+    def test_overlapping_run_is_a_quiet_no_op(self):
+        """While another sync holds the lock, nothing is exported and the run succeeds."""
         with tempfile.TemporaryDirectory() as directory:
-            output = Path(directory) / 'out.txt'
-            with self.assertLogs('sunshine_scraper.pipeline', level='ERROR') as logs:
-                self.assertFalse(run('page', 'api', output, 'yearly.png', 'titles.png'))
-            self.assertEqual(len(output.read_text().splitlines()), 2)
-            self.assertIn('Incomplete run', ' '.join(logs.output))
+            result, paths, _ = self.run_with(SyncResult('locked'), [export_row()], directory)
+            self.assertTrue(result)
+            self.assertFalse(paths[0].exists())
+
+    def test_database_settings_are_checked_before_any_download(self):
+        with patch.dict('os.environ', {}, clear=True), \
+                patch('sunshine_scraper.pipeline.run_sync') as sync:
+            with self.assertRaises(DatabaseConfigurationError):
+                run('page', 'api', 'out.txt', 'yearly.png', 'titles.png')
+            sync.assert_not_called()
+
+    def test_outdated_schema_stops_before_sync(self):
+        with patch('sunshine_scraper.pipeline.ensure_schema_current',
+                   side_effect=MigrationError('pending')), \
+                patch('sunshine_scraper.pipeline.run_sync') as sync:
+            with self.assertRaises(MigrationError):
+                run('page', 'api', 'out.txt', 'yearly.png', 'titles.png', settings=SETTINGS)
+            sync.assert_not_called()
 
     def test_tsv_quotes_embedded_delimiters(self):
         """A TSV-aware reader must recover tabs and quotes inside a field unchanged."""
@@ -433,12 +448,12 @@ class PipelineTests(unittest.TestCase):
         # Real file operations stay inside a scratch directory, deleted on exit.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            create_charts([], {}, root / 'empty.png', root / 'titles.png')
+            create_charts([], [], root / 'empty.png', root / 'titles.png')
             self.assertTrue((root / 'empty.png').exists())
             self.assertFalse((root / 'titles.png').exists())
             # This subdirectory is deliberately absent to force a real save error.
             with self.assertRaises(OSError):
-                create_charts([], {}, root / 'missing' / 'chart.png', root / 'titles.png')
+                create_charts([], [], root / 'missing' / 'chart.png', root / 'titles.png')
             # No open matplotlib figures should remain after success or failure.
             self.assertEqual(plt.get_fignums(), [])
 
@@ -459,6 +474,9 @@ class EntryPointTests(unittest.TestCase):
         # Logged errors/tracebacks are expected fixtures here, not failed tests.
         # Ctrl+C uses 130; expected and unexpected failures use 1.
         for error, code in [(ScraperError('offline'), 1), (OSError('denied'), 1),
+                            (DatabaseConfigurationError('no URL'), 1),
+                            (DatabaseAccessError('unreachable'), 1),
+                            (MigrationError('pending'), 1),
                             (RuntimeError('bug'), 1), (KeyboardInterrupt(), 130)]:
             with patch.object(entry, 'run', side_effect=error):
                 self.assertEqual(entry.main(), code)

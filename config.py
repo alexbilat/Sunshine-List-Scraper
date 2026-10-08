@@ -21,6 +21,12 @@ max_retries = 2
 # Starting retry delay in seconds. A value of 1 gives waits of 1s, then 2s.
 retry_backoff = 1
 
+# False skips datasets Ontario reports as unchanged since the last successful
+# load (HTTP 304 or an unchanged CKAN timestamp). True reloads every dataset,
+# e.g. after changing validation rules. The database URL is NOT set here: put
+# it in the SUNSHINE_DATABASE_URL environment variable (see .env.example).
+full_refresh = False
+
 # INFO shows progress plus warnings/errors. DEBUG adds page/row diagnostics.
 # WARNING hides ordinary progress; ERROR shows only failures.
 # CRITICAL is available in Python but is not used by this scraper.

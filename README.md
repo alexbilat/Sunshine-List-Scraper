@@ -1,20 +1,21 @@
 # Ontario Sunshine List Scraper
 
-A Python script that pulls every public record from the [Ontario Public Sector Salary Disclosure](https://www.ontario.ca/page/public-sector-salary-disclosure) ("Sunshine List") - every public employee in Ontario who earned over $100,000 in a given year - and turns it into a clean, deduplicated dataset with summary charts.
+A Python script that pulls every public record from the [Ontario Public Sector Salary Disclosure](https://www.ontario.ca/page/public-sector-salary-disclosure) ("Sunshine List") - every public employee in Ontario who earned over $100,000 in a given year - stores it in a PostgreSQL database, and exports a clean, deduplicated dataset with summary charts.
 
 Instead of scraping rendered HTML tables, the script finds the datasets linked on Ontario's disclosure page. Historical resources are read through Ontario's [CKAN open data API](https://data.ontario.ca/api/3/action/datastore_search); newer years are downloaded as English CSV files using Ontario's [official download list](https://www.ontario.ca/public-sector-salary-disclosure_artifacts/pssdfiles.json).
 
 ## What it does
 
 1. **Finds the published datasets.** Collects historical CKAN resource links and resolves newer main-list/addendum pages to their English CSV downloads. New years are included when Ontario adds them to the disclosure page and download list; the latest year and file addresses are not hardcoded.
-2. **Downloads the records.** Requests CKAN resources in batches of 100,000 until exhausted and reads complete CSV downloads for newer years. A missing advertised CSV or malformed download is reported as a failure instead of silently omitting that year.
-3. **Cleans the data.**
-   - Normalizes salary fields (strips `$` and `,`, handles missing or malformed values).
+2. **Skips what hasn't changed.** Before downloading, it asks Ontario whether each dataset changed since the last successful load (HTTP `304 Not Modified` for CSVs, CKAN's modification timestamp for historical resources). Unchanged datasets cost one small request.
+3. **Downloads the records.** Requests CKAN resources in batches of 100,000 until exhausted and reads complete CSV downloads for newer years. A missing advertised CSV or malformed download is reported as a failure instead of silently omitting that year.
+4. **Cleans the data.**
+   - Converts salaries to exact cents (strips `$` and `,`; rejects missing, malformed, or fractional-cent values).
    - Matches column labels despite capitalization, extra spaces, or underscores, and recognizes aliases such as `Surname`/`Last Name`, `Position`/`Job Title`, `Salary Paid`/`Salary`, and `Calendar Year`/`Year`.
    - Strips non-breaking spaces and collapses irregular whitespace in names, titles, and employers.
    - Filters out non-person records that occasionally show up in the raw data.
-4. **Deduplicates across datasets.** Some records appear more than once across different UUIDs. The script builds a composite key (name, title, employer, year, salary) to catch and skip duplicates.
-5. **Outputs the results.**
+5. **Stores it in PostgreSQL.** Each dataset is saved in its own transaction. A disclosure is identified by its contents (name, title, employer, year, salary; case-insensitive): one already stored is refreshed with the newest spelling, and anything new is added. Nothing is deleted, and every dataset a disclosure appeared in is remembered.
+6. **Outputs the results from the database.**
    - A tab-separated `output.txt` file with every record, sorted by salary (highest first).
    - A console summary of average salary and number of people per year.
    - Two charts: headcount and average salary by year, and the 10 most common job titles.
@@ -26,16 +27,37 @@ Instead of scraping rendered HTML tables, the script finds the datasets linked o
 
 ## Setup
 
-```bash
-pip install -r requirements.txt
+You need a running PostgreSQL server (version 14 or newer) and a database owned
+by a role that can create tables. Create them in `psql` as the `postgres`
+superuser:
+
+```sql
+CREATE ROLE sunshine LOGIN PASSWORD 'choose-a-password';
+CREATE DATABASE sunshine OWNER sunshine;
+```
+
+Then install, point the scraper at the database, create the tables, and run:
+
+```powershell
+python -m pip install -r requirements.txt
+$env:SUNSHINE_DATABASE_URL = 'postgresql://sunshine:choose-a-password@localhost:5432/sunshine'
+python -m sunshine_scraper.storage migrate
 python Sunshine_List_Scaper.py
 ```
 
+The database URL is read from the environment only; never put it in `config.py`
+or commit it. `.env.example` shows the format; it is not loaded automatically.
+
 This will:
 - Print progress for each dataset as it's processed
-- Write all records to `output.txt`
+- Store new and changed records in PostgreSQL
+- Write all stored records to `output.txt`
 - Print average salary and headcount per year to the console
 - Save `chart_yearly.png` and `chart_titles.png` in the working directory
+
+The first run loads everything (about 3.3 million disclosures). Later runs only
+download datasets Ontario has changed. Set `full_refresh = True` in `config.py`
+to reload everything, e.g. after changing validation rules.
 
 
 ## Choosing output paths
@@ -68,7 +90,9 @@ with open('output.txt', encoding='utf-8', newline='') as source:
 ```
 
 The columns are `Name`, `Salary`, `Job Title`, `Employer`, `Year`, and `UUID`.
-`Salary` is expressed in dollars; `UUID` identifies the source resource.
+`Salary` is expressed in dollars with exactly two decimals (e.g. `100000.00`).
+`UUID` identifies the dataset where the disclosure was first seen; the database
+keeps every dataset it appeared in.
 
 ## Project structure
 
@@ -78,7 +102,7 @@ The entry point is `Sunshine_List_Scaper.py`; edit URLs and output paths in `con
 
 Requests have configurable timeouts and bounded retries. Invalid API responses and rows are handled explicitly; duplicate records are counted. Progress, warnings, and failures use Python logging. Set `log_level` in `config.py` to `DEBUG` for detailed diagnostics.
 
-A run with failed datasets exports usable results and exits with status 1 to identify incomplete coverage. A run with no usable records preserves existing outputs. TSV export uses a temporary file and replacement to protect the previous output on write failures.
+A run with failed datasets keeps every dataset that loaded, exports from the database, and exits with status 1 to identify incomplete coverage. A failed dataset is rolled back on its own. If the database is empty, existing outputs are preserved. TSV export uses a temporary file and replacement to protect the previous output on write failures. A missing `SUNSHINE_DATABASE_URL`, an unreachable server, or an out-of-date schema stops the run before any download.
 
 Read [Python and error handling](learning/03-python-and-errors.md) for try/except, HTTP status codes, retries, logging levels, validation policies, and exit codes.
 
@@ -101,40 +125,81 @@ Alternative title labels are preserved instead of appearing as blank job titles.
 The existing row validity and duplicate rules still apply. These changes do not
 apply addendum change/deletion actions; correction handling remains a separate issue.
 
-## Learn the code before adding a database
+## Learn the code
 
 The [learning folder](learning/README.md) explains the app for users and contributors:
 
 - [Full application flow and module responsibilities](learning/01-app-flow.md)
 - [Follow one resource link and disclosure](learning/02-follow-one-record.md)
 - [Python constructs, errors, logging, and tests](learning/03-python-and-errors.md)
-- [PostgreSQL foundation and architecture review](learning/04-postgresql-architecture.md)
+- [PostgreSQL architecture and decisions](learning/04-postgresql-architecture.md)
 
-`sunshine_scraper/database.py` is a standalone read-only query practice module, not
-yet connected to the scraper. It requires an existing database/table. Running the
-scraper still writes TSV and charts; it does not create or populate `sunshine.db`.
-See the database chapter before running the practice query or adding persistence.
+Chapters 1–3 describe the earlier in-memory pipeline; chapter 4 describes how
+the database replaced it.
 
-## PostgreSQL foundation
+`sunshine_scraper/database.py` is a separate SQLite query practice module. The
+scraper does not use it.
 
-The new `sunshine_scraper/storage/` package provides an exact-money disclosure
-model, environment-based connection settings, and a parameterized read repository.
-`migrations/001_disclosure_foundation.sql` proposes three tables for disclosure
-contents, source resources, and their many-to-many provenance relationships.
+## PostgreSQL storage
 
-This is preparation for persistence: the normal scraper still exports files and
-does not call the database. The foundation does not yet ingest rows, apply
-corrections, schedule refreshes, or serve an API. Start with the
-[architecture review](learning/04-postgresql-architecture.md) for the design,
-limitations, optional setup, and decisions to make together.
+PostgreSQL is the source of truth. A run syncs Ontario's datasets into the
+database, then generates `output.txt`, the summary, and the charts from it.
 
-PostgreSQL support is optional (`requirements-postgres.txt`). Once a server and
-`SUNSHINE_DATABASE_URL` are configured, `python -m sunshine_scraper.storage check`
-checks connectivity. `python -m sunshine_scraper.storage top --year 2024 --limit 10`
-reads an already initialized/populated schema. Neither command creates tables or
-downloads data. Credentials belong in the environment; `.env` is ignored and
-`.env.example` is a reference, not an automatically loaded configuration file.
+| Table | Holds |
+| --- | --- |
+| `salary_records` | One row per distinct disclosure, salary in exact cents |
+| `source_resources` | Each discovered dataset and what its last load recorded (ETag, timestamps, content hash) |
+| `disclosure_sources` | Which datasets each disclosure appeared in |
+| `sync_runs` | One row per run: status and counts |
+| `sync_run_resources` | What happened to each dataset in each run, including error messages |
+| `schema_migrations` | Which migration files this database has received |
 
-The ordinary offline test command also checks the new model and repository.
-Real PostgreSQL tests are opt-in through `SUNSHINE_TEST_DATABASE_URL` pointing at
-a dedicated test database; otherwise they are skipped.
+Database commands (all use `SUNSHINE_DATABASE_URL`):
+
+```powershell
+python -m sunshine_scraper.storage migrate            # apply new migration files
+python -m sunshine_scraper.storage migrate --status   # list applied/pending files
+python -m sunshine_scraper.storage check              # read-only connectivity check
+python -m sunshine_scraper.storage top --year 2024 --limit 10
+```
+
+The scraper never changes the schema itself; it stops and asks you to run
+`migrate` when files are pending. A database where `001` was applied by hand
+with `psql` can be adopted with `migrate --baseline 001`. See
+`migrations/README.md` for how to add a migration.
+
+### Checking what a run did
+
+```sql
+SELECT id, started_at, finished_at, status, resources_loaded,
+       resources_unchanged, resources_failed
+FROM sync_runs ORDER BY id DESC LIMIT 5;
+
+SELECT resource_id, status, rows_valid, rows_inserted, rows_refreshed, error_message
+FROM sync_run_resources WHERE run_id = (SELECT max(id) FROM sync_runs);
+```
+
+A run that crashed stays `running` with no `finished_at`.
+
+### Running it on a schedule
+
+Only one sync runs at a time: a second run that starts while one is in progress
+logs a warning and exits with status 0 without doing anything. A scheduler
+(Windows Task Scheduler, cron) can therefore start
+`python Sunshine_List_Scaper.py` every 15 minutes. Ontario usually changes
+nothing between runs, so most runs only send one small request per dataset.
+
+### Backups
+
+```powershell
+pg_dump -h localhost -U sunshine -d sunshine -Fc -f sunshine.dump
+pg_restore -h localhost -U sunshine -d an_empty_database sunshine.dump
+```
+
+Keep dumps outside the repository.
+
+### Tests
+
+The ordinary offline test command needs no database. Real PostgreSQL tests are
+opt-in through `SUNSHINE_TEST_DATABASE_URL`, which must point at a dedicated test
+database; each test creates and drops its own schema there.

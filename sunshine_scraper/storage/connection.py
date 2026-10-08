@@ -1,4 +1,4 @@
-"""Explicit, optional PostgreSQL connection setup with no import-time I/O."""
+"""Explicit PostgreSQL connection setup with no import-time I/O."""
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 import os
@@ -31,23 +31,28 @@ class DatabaseSettings:
 
 
 @contextmanager
-def open_connection(settings):
-    """Own one connection and its transaction for an explicit operation.
+def open_connection(settings, *, autocommit=False):
+    """Own one connection for an explicit operation.
 
-    Psycopg commits on success, rolls back on exception, and always closes.
+    By default the whole block is one transaction: Psycopg commits on success,
+    rolls back on exception, and always closes. With autocommit=True each
+    statement commits by itself, and the caller groups writes explicitly with
+    connection.transaction(). The sync uses that mode so that one failed
+    dataset rolls back alone while earlier datasets stay committed.
     A future web service can replace this boundary with a connection pool.
     """
     try:
         import psycopg
     except ImportError as error:
         raise DatabaseConfigurationError(
-            "Install optional database dependencies with "
-            "python -m pip install -r requirements-postgres.txt"
+            "Install the database driver with "
+            "python -m pip install -r requirements.txt"
         ) from error
     try:
         with psycopg.connect(settings.database_url,
                              connect_timeout=settings.connect_timeout,
-                             application_name='sunshine_scraper') as connection:
+                             application_name='sunshine_scraper',
+                             autocommit=autocommit) as connection:
             yield connection
     except psycopg.Error as error:
         # Do not echo a driver's raw error or the URL into a public CLI message.

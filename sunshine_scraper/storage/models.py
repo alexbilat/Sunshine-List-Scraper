@@ -37,6 +37,17 @@ def salary_to_cents(value):
     return int(cents)
 
 
+def format_cents(cents):
+    """Return exact dollars with two decimals, e.g. 10000000 -> '100000.00'.
+
+    Integer arithmetic avoids both float rounding and Decimal's exponent
+    notation (Decimal(10000000) / 100 displays as '1E+5').
+    """
+    if type(cents) is not int or cents < 0:
+        raise ValueError("cents must be a nonnegative integer")
+    return f'{cents // 100}.{cents % 100:02d}'
+
+
 @dataclass(frozen=True)
 class Disclosure:
     """One observed disclosure, not a stable employee identity.
@@ -113,3 +124,23 @@ class SalaryResult:
     @property
     def name(self):
         return f'{self.first_name} {self.last_name}'
+
+
+@dataclass(frozen=True)
+class YearSummary:
+    """Aggregates for one year; average_cents is exact (Decimal) or None."""
+
+    year: int
+    people: int
+    average_cents: object
+
+    @property
+    def average_dollars(self):
+        """Average salary in dollars as a float, for display and charts only."""
+        return float(self.average_cents) / 100 if self.average_cents is not None else 0.0
+
+
+@dataclass(frozen=True)
+class TitleCount:
+    job_title: str
+    appearances: int

@@ -1,5 +1,5 @@
-"""PostgreSQL foundation, separate from collection and file export.
+"""PostgreSQL storage: models, connection, migrations, and SQL repositories.
 
 Importing this package does not connect, create tables, or import Psycopg.
-The scraper does not write to PostgreSQL until a sync service is introduced.
+sunshine_scraper.sync decides what to write; these modules translate it to SQL.
 """

@@ -1,5 +1,12 @@
 # 2. Follow one resource and one disclosure
 
+> **Note:** this chapter describes the in-memory pipeline that existed before
+> PostgreSQL became the source of truth. Discovery, downloading, field aliases,
+> and retries still work as described; `clean_record()`, `process_records()`,
+> and `seen_records` were replaced by `Disclosure.from_source_row()`,
+> `sync.validate_rows()`, and the database's unique `content_key`. See
+> [chapter 4](04-postgresql-architecture.md).
+
 The URLs/people below are illustrative. `example-resource` is a stand-in for a real
 CKAN resource UUID; do not expect that identifier to work against Ontario's API.
 

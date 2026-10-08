@@ -1,5 +1,12 @@
 # 1. Application flow
 
+> **Note:** this chapter describes the in-memory pipeline that existed before
+> PostgreSQL became the source of truth. Discovery, downloading, field aliases,
+> and retries still work as described; `clean_record()`, `process_records()`,
+> and `seen_records` were replaced by `Disclosure.from_source_row()`,
+> `sync.validate_rows()`, and the database's unique `content_key`. See
+> [chapter 4](04-postgresql-architecture.md).
+
 ## The purpose and the boundaries
 
 The application discovers Ontario Sunshine List resource links, downloads the

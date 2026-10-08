@@ -1,23 +1,32 @@
-# 4. PostgreSQL foundation and architecture review
+# 4. PostgreSQL architecture and decisions
 
 ## What exists now
 
-The normal scraper still downloads, cleans, deduplicates in memory, and exports TSV
-and charts. Its `seen_records` set is recreated every run. The SQLite practice file
-is independent. No database or scheduled job is created by this change.
+PostgreSQL is the scraper's source of truth. `python Sunshine_List_Scaper.py`
+syncs Ontario's datasets into the database (`sunshine_scraper/sync.py`), then
+writes `output.txt`, the yearly summary, and the charts from it
+(`sunshine_scraper/pipeline.py`). The in-memory `names_list`/`seen_records`
+pipeline is gone; the database's unique `content_key` replaces it, across runs.
 
-The new foundation contains executable Python adapters and reads, an explicit SQL
-migration, optional connection settings, and tests. It does not contain ingestion
-writes, source-change detection, scheduling, a frontend, or a web API. The schema is
-an initial design for review; it has not been applied to a server in this workspace.
+This chapter began as a design review before any ingestion existed. The design
+sections below still describe the reasoning; "Decisions" at the end records what
+was settled and how it was implemented. The SQLite practice file is independent.
+
+| New piece | Responsibility |
+| --- | --- |
+| `storage/migrations.py` + `migrate` command | Apply numbered SQL files once, in order, with checksums |
+| `migrations/002_sync_tracking.sql` | Run records and refresh timestamps |
+| `storage/writer.py` | COPY into a staging table, upsert disclosures, link sources, record runs |
+| `sync.py` | Lock, discover, check for changes, download, validate, one transaction per dataset |
+| `storage/repository.py` | Export stream, yearly aggregates, top titles |
 
 ## The intended architecture
 
 ```mermaid
 flowchart LR
     A[Ontario CKAN and CSV sources] --> B[Existing client and shared cleaning rules]
-    B --> C[Future synchronization service]
-    C --> D[PostgreSQL write repository]
+    B --> C[Synchronization service: sync.py]
+    C --> D[PostgresDisclosureWriter]
     D --> E[PostgreSQL]
     F[Future frontend] --> G[Backend API]
     G --> H[SalaryReader interface]
@@ -159,57 +168,54 @@ staging when measured volume makes that worthwhile. PostgreSQL handles uniquenes
 through its index rather than asking Python to scan every persisted record.
 See [PostgreSQL conflict handling](https://www.postgresql.org/docs/current/sql-insert.html).
 
-## Optional commands after we review the design
-
-The normal installation and scraper command still work without PostgreSQL. When
-you have a local development PostgreSQL server, role, and database, install the
-optional driver:
+## Commands
 
 ```powershell
-python -m pip install -r requirements-postgres.txt
+python -m pip install -r requirements.txt
 $env:SUNSHINE_DATABASE_URL = 'postgresql://sunshine:YOUR_LOCAL_PASSWORD@localhost:5432/sunshine'
-python -m sunshine_scraper.storage check
-```
-
-`.env.example` documents the setting; this project does not automatically load
-`.env` files. Do not commit credentials. The `check` command verifies server access
-only; it does not create or inspect the application tables.
-
-After reviewing the SQL, apply it once to an empty application schema using an
-appropriately privileged development role:
-
-```powershell
-psql --host localhost --username sunshine --dbname sunshine -v ON_ERROR_STOP=1 -f migrations/001_disclosure_foundation.sql
+python -m sunshine_scraper.storage migrate
+python Sunshine_List_Scaper.py
 python -m sunshine_scraper.storage top --year 2024 --limit 10
 ```
 
-The migration creates tables in the connection's target schema/search path. It is
-transactional, has no destructive reset, and intentionally fails if tables already
-exist. There is no migration version tracker yet: add one before introducing
-multiple migrations or deploying to shared environments. Applying this migration
-does not populate data; the read returns no rows until ingestion or test data exists.
-The `check` and `top` commands explicitly use read-only transactions.
+`.env.example` documents the setting; this project does not automatically load
+`.env` files. Do not commit credentials. `migrate` is the only command that
+changes the schema; the scraper checks that no migration is pending and stops
+before downloading if one is. `check` and `top` use read-only transactions.
 
-Offline checks:
+For real SQL checks, set `SUNSHINE_TEST_DATABASE_URL` to a **dedicated test
+database** before running `python -m unittest discover -s tests -v`. Integration
+tests migrate randomly named schemas there and drop only their own schemas.
+Without that variable they are skipped.
 
-```powershell
-python -m unittest discover -s tests -v
-```
+## Decisions
 
-For real SQL checks, install the optional driver and explicitly set
-`SUNSHINE_TEST_DATABASE_URL` to a **dedicated test database** before running the same
-command. Integration tests create randomly named schemas there and drop only their
-own schemas. Without that variable they are skipped. Offline tests cannot establish
-that the migration or query works against an actual PostgreSQL server.
+These were settled by the project owner before implementation:
 
-## Decisions for our next review
+| # | Decision | Implementation |
+| --- | --- | --- |
+| D1 | PostgreSQL replaces the TSV as the source of truth | The pipeline syncs, then exports from one `REPEATABLE READ` snapshot |
+| D2 | Store disclosures as published; no correction logic yet | Nothing is deleted; addendum change/deletion actions are not applied |
+| D3 | "Same entry" means identical normalized contents (`content_key`) | `ON CONFLICT DO UPDATE` refreshes spelling, `last_seen_at`, `updated_at`; a changed salary is a new row |
+| D4 | Commit per dataset | One transaction per dataset; failures are recorded separately in `sync_run_resources` |
+| D5 | Plain SQL migrations plus a small runner | `schema_migrations` with checksums; `migrate`, `--status`, `--baseline` |
+| D6 | Prepare for a 15-minute refresh | Advisory lock (one sync at a time); HTTP `304` for CSVs; CKAN `resource_show` timestamps; content hashes as fallback |
 
-1. Is storing historical observations sufficient initially, or must the first
-   frontend show corrected current records? Which source fields identify corrections?
-2. Should one resource or an entire successful run be the publication boundary?
-3. Can the source reliably advertise changes, and what happens to rejected rows?
-4. Which queries will the first frontend need beyond top salaries by year?
+Consequences worth knowing:
 
-The next implementation step should be a small ingestion experiment with fixtures
-in a development database. Validate replay, provenance, correction cases, and failure
-rollback before connecting a full scrape or enabling a scheduler.
+- **Republished files add rows.** Because of D2 and D3, when Ontario republishes
+  a year with corrected salaries, the corrected rows are new disclosures and
+  the originals stay. Yearly counts can grow over time. A future "current view"
+  would need correction rules: the addenda's change/deletion semantics, or
+  preferring the newest dataset per year.
+- **Organizations-only datasets.** Ontario lists "organizations with no salaries
+  to disclose" beside the salary lists. They have rows but no people. They are
+  recorded as loaded with zero disclosures, not as failures.
+- **Overlapping runs.** A run that finds the sync lock held exits with status 0
+  and exports nothing; the running sync will export.
+
+Still open:
+
+1. Correction handling (see above) and which source fields identify corrections.
+2. Which queries a first API/frontend needs beyond top salaries and yearly totals.
+3. Scheduling, hosting, and a read-only role for the API.
