@@ -19,3 +19,7 @@ CLAUDE.md
 /sunshine.db-journal
 /sunshine.db-wal
 /sunshine.db-shm
+
+# Learning stuff 
+learning\05-postgresql-primer.md
+learning\06-postgresql-tutorial.md
