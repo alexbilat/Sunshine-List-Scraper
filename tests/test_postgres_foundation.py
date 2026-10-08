@@ -10,11 +10,12 @@ import sys
 import unittest
 from unittest.mock import Mock, patch
 
-from sunshine_scraper.processing import clean_record
 from sunshine_scraper.storage.connection import (DatabaseConfigurationError,
                                                 DatabaseSettings)
-from sunshine_scraper.storage.models import Disclosure, MAX_BIGINT, salary_to_cents
+from sunshine_scraper.storage.models import (Disclosure, MAX_BIGINT, YearSummary,
+                                            format_cents, salary_to_cents)
 from sunshine_scraper.storage.repository import PostgresSalaryRepository
+from sunshine_scraper.storage.writer import PostgresDisclosureWriter
 
 
 def source_row(**changes):
@@ -29,11 +30,10 @@ class DisclosureTests(unittest.TestCase):
     def test_adapter_preserves_names_aliases_and_exact_money(self):
         raw = source_row()
         disclosure = Disclosure.from_source_row(raw)
-        exported, _ = clean_record(raw, 'dataset')
         self.assertEqual(disclosure.first_name, 'Alex')
         self.assertEqual(disclosure.last_name, 'Example')
-        self.assertEqual(disclosure.job_title, exported['Job Title'])
-        self.assertEqual(disclosure.employer, exported['Employer'])
+        self.assertEqual(disclosure.job_title, 'Software Developer')
+        self.assertEqual(disclosure.employer, 'Example Hospital')
         self.assertEqual(disclosure.year, 2024)
         self.assertEqual(disclosure.salary_cents, 12345678)
 
@@ -105,6 +105,10 @@ class ConfigurationTests(unittest.TestCase):
             'import sunshine_scraper.storage.models; '
             'import sunshine_scraper.storage.connection; '
             'import sunshine_scraper.storage.repository; '
+            'import sunshine_scraper.storage.writer; '
+            'import sunshine_scraper.storage.migrations; '
+            'import sunshine_scraper.sync; '
+            'import sunshine_scraper.pipeline; '
             'assert "psycopg" not in sys.modules'
         )
         result = subprocess.run([sys.executable, '-c', program],
@@ -119,6 +123,21 @@ class ConfigurationTests(unittest.TestCase):
                 with self.assertLogs('sunshine_scraper.storage.__main__', level='ERROR'):
                     self.assertEqual(main(['check']), 1)
                 connect.assert_not_called()
+
+
+class FormattingTests(unittest.TestCase):
+    def test_cents_format_as_exact_two_decimal_dollars(self):
+        for cents, text in [(0, '0.00'), (5, '0.05'), (10000000, '100000.00'),
+                            (12345678, '123456.78'), (MAX_BIGINT, '92233720368547758.07')]:
+            with self.subTest(cents=cents):
+                self.assertEqual(format_cents(cents), text)
+        for bad in (-1, 1.5, True, '100'):
+            with self.assertRaises(ValueError):
+                format_cents(bad)
+
+    def test_year_summary_average_handles_missing_values(self):
+        self.assertEqual(YearSummary(2024, 2, Decimal('12345678.5')).average_dollars, 123456.785)
+        self.assertEqual(YearSummary(2024, 0, None).average_dollars, 0.0)
 
 
 class RepositoryTests(unittest.TestCase):
@@ -142,6 +161,31 @@ class RepositoryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 reader.get_top_salaries(year, limit)
         connection.execute.assert_not_called()
+
+    def test_aggregate_reads_bind_inputs_and_never_commit(self):
+        connection = Mock()
+        connection.execute.return_value.fetchall.return_value = [('Developer', 3)]
+        titles = PostgresSalaryRepository(connection).top_job_titles(5)
+        self.assertEqual((titles[0].job_title, titles[0].appearances), ('Developer', 3))
+        self.assertEqual(connection.execute.call_args.args[1], (5,))
+        with self.assertRaises(ValueError):
+            PostgresSalaryRepository(connection).top_job_titles(0)
+        connection.commit.assert_not_called()
+
+
+class WriterTests(unittest.TestCase):
+    def test_writes_use_parameters_and_leave_transactions_to_the_caller(self):
+        connection = Mock()
+        writer = PostgresDisclosureWriter(connection)
+        writer.register_source("x'; DROP TABLE salary_records; --", 'https://x.test', 'csv')
+        sql, parameters = connection.execute.call_args.args
+        # The suspicious ID travels as data, never as part of the SQL text.
+        self.assertNotIn('DROP TABLE', sql)
+        self.assertEqual(parameters[0], "x'; DROP TABLE salary_records; --")
+        writer.mark_source_loaded('a', etag=None, last_modified=None,
+                                  content_sha256=None, row_count=1)
+        connection.commit.assert_not_called()
+        connection.rollback.assert_not_called()
 
 
 if __name__ == '__main__':
