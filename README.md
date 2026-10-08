@@ -38,6 +38,21 @@ This will:
 - Save `chart_yearly.png` and `chart_titles.png` in the working directory
 
 
+## Choosing output paths
+
+Edit the three output settings in `config.py` to keep each run's files in a
+separate folder. Create that folder before running the scraper:
+
+```python
+output_path = 'results/output.txt'
+yearly_chart_path = 'results/chart_yearly.png'
+titles_chart_path = 'results/chart_titles.png'
+```
+
+Relative paths start from the directory where you run Python. Custom output
+folders such as `results/` are not covered by the default output ignore rules;
+add your folder to your local `.git/info/exclude` if you want to keep it out of Git.
+
 ## Reading the exported records
 
 `output.txt` is a UTF-8, tab-separated file with a header row. In a spreadsheet
