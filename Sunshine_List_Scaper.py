@@ -4,6 +4,8 @@ import sys
 import config
 from sunshine_scraper.errors import ScraperError
 from sunshine_scraper.pipeline import run
+from sunshine_scraper.storage.connection import DatabaseAccessError, DatabaseConfigurationError
+from sunshine_scraper.storage.migrations import MigrationError
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +24,14 @@ def main():
         complete = run(config.url, config.api_url, config.output_path,
             config.yearly_chart_path, config.titles_chart_path,
             timeout=config.request_timeout, max_retries=config.max_retries,
-            backoff=config.retry_backoff)
+            backoff=config.retry_backoff, full_refresh=config.full_refresh)
         if complete:
             return 0
         return 1
-    except (ScraperError, OSError) as error:
-        # Expected request/data failures and file errors get a concise message.
+    except (ScraperError, OSError, DatabaseConfigurationError, DatabaseAccessError,
+            MigrationError) as error:
+        # Expected request/data, file, and database failures get a concise
+        # message. Database messages never include the connection URL.
         logger.error("Scraper stopped: %s", error)
         return 1
     except KeyboardInterrupt:

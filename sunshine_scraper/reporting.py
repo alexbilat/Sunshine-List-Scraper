@@ -1,37 +1,39 @@
-"""Report cleaned data; this module does not download or validate raw rows."""
+"""Report database aggregates; this module does not download, validate, or query."""
 import logging
-from collections import Counter
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
 logger = logging.getLogger(__name__)
 
 
-def print_yearly_summary(yearly_salary_dict):
-    """Log an average and accepted-record count for each year, newest first."""
-    for year in sorted(yearly_salary_dict, reverse=True):
-        salaries = yearly_salary_dict[year]
-        if salaries:
-            average = sum(salaries) / len(salaries)
-        else:
-            average = 0
-        logger.info('%s: Average: %.2f Number of people: %s', year, average, len(salaries))
+def print_yearly_summary(yearly_summary):
+    """Log an average and record count for each year, newest first.
+
+    yearly_summary holds YearSummary aggregates computed by the database.
+    """
+    for summary in sorted(yearly_summary, key=summary_year, reverse=True):
+        logger.info('%s: Average: %.2f Number of people: %s', summary.year,
+                    summary.average_dollars, summary.people)
 
 
-def create_charts(names_list, yearly_salary_dict, yearly_chart_path, titles_chart_path):
-    """Save yearly totals and the ten most frequent nonempty job titles.
+def summary_year(summary):
+    """Give sorted the year each YearSummary should be ordered by."""
+    return summary.year
 
-    Inputs are the pipeline's accepted records and grouped salaries. File errors
-    propagate to the pipeline, which can report failure while keeping the TSV.
+
+def create_charts(yearly_summary, top_titles, yearly_chart_path, titles_chart_path):
+    """Save yearly totals and the most frequent nonempty job titles.
+
+    Inputs are aggregates from the database (YearSummary and TitleCount rows),
+    so the charts never need every record in memory. File errors propagate to
+    the pipeline, which can report failure while keeping the TSV.
     """
     # All three lists must use the same year order so each bar and point align.
-    years_sorted = sorted(yearly_salary_dict.keys())
-    averages = []
-    counts = []
-    for year in years_sorted:
-        salaries = yearly_salary_dict[year]
-        averages.append(sum(salaries) / len(salaries) if salaries else 0)
-        counts.append(len(salaries))
+    # Year labels are text so matplotlib draws one evenly spaced bar per year.
+    ordered = sorted(yearly_summary, key=summary_year)
+    years_sorted = [str(summary.year) for summary in ordered]
+    averages = [summary.average_dollars for summary in ordered]
+    counts = [summary.people for summary in ordered]
 
     figure, count_axis = plt.subplots(figsize=(14, 6))
     count_axis.bar(years_sorted, counts, color='steelblue', alpha=0.4, label='# of People')
@@ -59,24 +61,14 @@ def create_charts(names_list, yearly_salary_dict, yearly_chart_path, titles_char
         # Release the figure even if saving fails (e.g. a missing directory).
         plt.close(figure)
 
-    # Counter maps a title to the number of accepted records with that title.
-    title_counts = Counter()
-    for person in names_list:
-        title = person['Job Title']
-        if title:
-            title_counts[title] += 1
-    top_titles = title_counts.most_common(10)
     if not top_titles:
         logger.warning("No job titles available; title chart was not written")
         return  # Leave any previously saved title chart untouched.
 
-    # most_common returns largest first. Reverse the order so the largest bar
+    # The database returns largest first. Reverse the order so the largest bar
     # appears at the top of a horizontal chart, whose first bar is at the bottom.
-    labels = []
-    values = []
-    for title, count in reversed(top_titles):
-        labels.append(title)
-        values.append(count)
+    labels = [title.job_title for title in reversed(top_titles)]
+    values = [title.appearances for title in reversed(top_titles)]
 
     figure, title_axis = plt.subplots(figsize=(12, 6))
     title_axis.barh(labels, values, color='teal')

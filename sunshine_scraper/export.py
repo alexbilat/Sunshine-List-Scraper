@@ -10,6 +10,9 @@ COLUMNS = ('Name', 'Salary', 'Job Title', 'Employer', 'Year', 'UUID')
 def write_records(records, output_path):
     """Write a six-column TSV without truncating an existing export on failure.
 
+    records may be any iterable of dictionaries, including a generator that
+    streams rows from the database, so the file never needs them all in memory.
+
     File errors propagate to the CLI. The temporary file is in the destination
     directory so os.replace operates within one filesystem.
     """
