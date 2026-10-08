@@ -1,6 +1,9 @@
 """Discover Ontario's CKAN resources and newer CSV downloads; validate requests."""
 import csv
+from dataclasses import dataclass
+from hashlib import sha256
 import io
+import json
 import logging
 import math
 import re
@@ -31,12 +34,15 @@ def resource_id_from_link(link):
     return parts[-1]
 
 
-def request_page(url, *, params=None, timeout=30, max_retries=2, backoff=1):
+def request_page(url, *, params=None, headers=None, not_modified_ok=False,
+                 timeout=30, max_retries=2, backoff=1):
     """Return an HTTP 200 response, or raise ScraperError after a failure.
 
     timeout is a connection/read timeout in seconds, not a whole-run deadline.
     max_retries counts extra attempts: 2 retries means at most 3 requests.
     The * requires options to be named, e.g. request_page(url, timeout=30).
+    not_modified_ok=True also accepts HTTP 304, the reply to a conditional
+    request (If-None-Match/If-Modified-Since) whose resource is unchanged.
     """
     # bool is a subclass of int in Python; reject True/False as numeric settings.
     if (isinstance(timeout, bool) or not isinstance(timeout, (int, float))
@@ -50,7 +56,7 @@ def request_page(url, *, params=None, timeout=30, max_retries=2, backoff=1):
     total_attempts = max_retries + 1
     for attempt in range(total_attempts):
         try:
-            response = requests.get(url, params=params, timeout=timeout)
+            response = requests.get(url, params=params, headers=headers, timeout=timeout)
         # These failures can occur without receiving an HTTP response.
         except (requests.Timeout, requests.ConnectionError) as error:
             reason = type(error).__name__
@@ -58,7 +64,7 @@ def request_page(url, *, params=None, timeout=30, max_retries=2, backoff=1):
             raise ScraperError(f"Request failed for {url}: {error}") from error
         else:
             # This block runs only when requests.get did not raise an exception.
-            if response.status_code == 200:
+            if response.status_code == 200 or (not_modified_ok and response.status_code == 304):
                 return response
             reason = f"HTTP {response.status_code}"
             if response.status_code not in RETRYABLE_STATUSES:
@@ -145,8 +151,44 @@ def fetch_csv_records(url, **request_options):
     partial dataset. Individual missing values are handled by row processing.
     """
     response = request_page(url, **request_options)
+    return parse_csv_records(response.content, url)
+
+
+@dataclass(frozen=True)
+class CsvDownload:
+    """A parsed CSV plus what is needed to recognize it again next time."""
+
+    records: list
+    etag: str | None
+    last_modified: str | None
+    content_sha256: str
+
+
+def fetch_csv_download(url, *, etag=None, last_modified=None, **request_options):
+    """Download a CSV unless the server confirms our stored copy is current.
+
+    Returns None for HTTP 304 Not Modified: the server compared our stored
+    ETag/Last-Modified with its file and sent no body. Ontario's download
+    server supports this, so an unchanged year costs one tiny request.
+    """
+    headers = {}
+    if etag:
+        headers['If-None-Match'] = etag
+    if last_modified:
+        headers['If-Modified-Since'] = last_modified
+    response = request_page(url, headers=headers or None, not_modified_ok=True, **request_options)
+    if response.status_code == 304:
+        return None
+    return CsvDownload(records=parse_csv_records(response.content, url),
+                       etag=response.headers.get('ETag'),
+                       last_modified=response.headers.get('Last-Modified'),
+                       content_sha256=sha256(response.content).hexdigest())
+
+
+def parse_csv_records(content, url):
+    """Turn downloaded CSV bytes into row dictionaries, or raise ScraperError."""
     try:
-        text = response.content.decode('utf-8-sig')
+        text = content.decode('utf-8-sig')
         reader = csv.DictReader(io.StringIO(text, newline=''), strict=True)
         columns = {normalize_field_name(name) for name in (reader.fieldnames or [])}
         required_fields = ('first_name', 'last_name', 'employer', 'year', 'salary')
@@ -163,6 +205,37 @@ def fetch_csv_records(url, **request_options):
         return records
     except (UnicodeError, csv.Error, ValueError) as error:
         raise ScraperError(f"CSV {url} could not be read: {error}") from error
+
+
+def fetch_ckan_resource_version(api_url, resource_id, **request_options):
+    """Return CKAN's modification timestamp for one resource.
+
+    The datastore API sends no ETag, but CKAN's resource_show metadata has
+    last_modified (when the data file changed). metadata_modified is the
+    fallback; it also changes on metadata-only edits, which merely causes a
+    harmless reload. The action lives beside datastore_search in the API.
+    """
+    show_url = urljoin(api_url, 'resource_show')
+    response = request_page(show_url, params={'id': resource_id}, **request_options)
+    try:
+        data = response.json()
+    except ValueError as error:
+        raise ScraperError(f"Resource {resource_id}: metadata is not valid JSON") from error
+    if not isinstance(data, dict) or data.get('success') is not True:
+        raise ScraperError(f"Resource {resource_id}: metadata response does not report success=true")
+    result = data.get('result')
+    if not isinstance(result, dict):
+        raise ScraperError(f"Resource {resource_id}: metadata response has no result object")
+    version = result.get('last_modified') or result.get('metadata_modified')
+    if not isinstance(version, str) or not version.strip():
+        return None
+    return version
+
+
+def records_sha256(records):
+    """Fingerprint CKAN rows: same rows in the same order give the same hash."""
+    encoded = json.dumps(records, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+    return sha256(encoded.encode('utf-8')).hexdigest()
 
 
 def fetch_all_records(api_url, resource_id, *, page_size=100000, **request_options):
