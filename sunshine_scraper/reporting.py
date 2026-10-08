@@ -30,7 +30,7 @@ def create_charts(names_list, yearly_salary_dict, yearly_chart_path, titles_char
     counts = []
     for year in years_sorted:
         salaries = yearly_salary_dict[year]
-        averages.append(sum(salaries) / len(salaries))
+        averages.append(sum(salaries) / len(salaries) if salaries else 0)
         counts.append(len(salaries))
 
     figure, count_axis = plt.subplots(figsize=(14, 6))
