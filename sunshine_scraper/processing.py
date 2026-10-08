@@ -25,7 +25,7 @@ def normalize_field_name(name):
     """Match column labels despite capitals, underscores, spaces, or a BOM."""
     if not isinstance(name, str):
         raise ValueError("column name must be text")
-    return ' '.join(name.lstrip('\ufeff').replace('_', ' ').split()).casefold()
+    return ' '.join(name.strip().lstrip('\ufeff').replace('_', ' ').split()).casefold()
 
 
 def get_record_field(fields, name):
