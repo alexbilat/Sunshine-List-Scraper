@@ -67,8 +67,11 @@ class ValidationTests(unittest.TestCase):
              'Job title': 'Developer', 'Salary': '123456', 'Year': '2020'},
             {' FIRST\xa0NAME ': 'Alex', '﻿LAST_NAME': 'Bilat', ' employer ': 'Ontario',
              'JOB_TITLE': 'Developer', 'SALARY_PAID': '123456', 'calendar_year': '2025'},
+            # The 2023 main list's header is "JobTitle"; it once left ~300,000 titles blank.
+            {'First Name': 'Alex', 'Last Name': 'Bilat', 'Employer': 'Ontario',
+             'JobTitle': 'Developer', 'Salary': '123456', 'Year': '2023'},
         ]
-        for example, expected_year in zip(examples, (2001, 2014, 2020, 2025)):
+        for example, expected_year in zip(examples, (2001, 2014, 2020, 2025, 2023)):
             with self.subTest(year=expected_year):
                 disclosure = Disclosure.from_source_row(example)
                 self.assertEqual((disclosure.first_name, disclosure.last_name), ('Alex', 'Bilat'))

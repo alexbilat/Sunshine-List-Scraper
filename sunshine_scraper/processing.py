@@ -9,7 +9,8 @@ uses them to check a CSV's columns. Duplicates are decided by the database.
 FIELD_ALIASES = {
     'first_name': ('first name',),
     'last_name': ('last name', 'surname'),
-    'job_title': ('job title', 'position'),
+    # The 2023 main list spells this header "JobTitle", with no space.
+    'job_title': ('job title', 'position', 'jobtitle'),
     'employer': ('employer',),
     'year': ('calendar year', 'year'),
     'salary': ('salary paid', 'salary'),

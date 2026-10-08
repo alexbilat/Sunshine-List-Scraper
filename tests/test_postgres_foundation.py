@@ -44,9 +44,16 @@ class DisclosureTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertEqual(salary_to_cents(value), expected)
 
+    def test_fractions_of_a_cent_round_half_up(self):
+        """Real 2021-2023 rows publish three decimals; they round, not vanish."""
+        for value, expected in [('111259.878', 11125988), ('149695.167', 14969517),
+                                ('1.005', 101), ('1.004', 100), ('0.001', 0)]:
+            with self.subTest(value=value):
+                self.assertEqual(salary_to_cents(value), expected)
+
     def test_money_rejects_lossy_invalid_or_unrepresentable_values(self):
-        for value in [0.29, True, None, '', 'NaN', 'Infinity', '-1', '1.001',
-                      '92233720368547758.08', '1e-10000000']:
+        for value in [0.29, True, None, '', 'NaN', 'Infinity', '-1',
+                      '92233720368547758.08', '92233720368547758.075', '1e-10000000']:
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     salary_to_cents(value)

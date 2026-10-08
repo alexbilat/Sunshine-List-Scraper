@@ -1,6 +1,7 @@
 """Database-ready disclosures: exact money and repeatable content identity."""
 from dataclasses import dataclass
-from decimal import Decimal, DecimalException, Inexact, InvalidOperation, localcontext
+from decimal import (ROUND_HALF_UP, Decimal, DecimalException, Inexact, InvalidOperation,
+                     localcontext)
 from hashlib import sha256
 import json
 
@@ -10,7 +11,13 @@ MAX_BIGINT = 2**63 - 1
 
 
 def salary_to_cents(value):
-    """Parse source money without floating-point rounding or silent truncation."""
+    """Parse source money exactly, rounding fractions of a cent half-up.
+
+    A few Ontario rows (2021-2023) publish three decimals, e.g. 111259.878.
+    Rounding to the nearest cent, as accounting does, keeps those people in
+    the data; rejecting them would silently drop real disclosures. Rounding
+    happens once, on exact Decimal input, never through a float.
+    """
     # A float may already have lost information. Persist from the raw source row.
     if isinstance(value, float):
         raise ValueError("database salary must come from exact source text, not a float")
@@ -32,9 +39,11 @@ def salary_to_cents(value):
             cents = amount * 100
         except DecimalException as error:
             raise ValueError("salary cannot be represented as exact cents") from error
-        if cents != cents.to_integral_value():
-            raise ValueError("salary must have no fractional cents")
-    return int(cents)
+    # Outside the Inexact trap: rounding is intentionally inexact.
+    rounded = cents.quantize(Decimal(1), rounding=ROUND_HALF_UP)
+    if rounded > MAX_BIGINT:
+        raise ValueError("salary exceeds PostgreSQL BIGINT cents capacity")
+    return int(rounded)
 
 
 def format_cents(cents):
