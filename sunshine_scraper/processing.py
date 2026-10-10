@@ -3,6 +3,7 @@
 storage.models.Disclosure applies these rules to validate each row; the client
 uses them to check a CSV's columns. Duplicates are decided by the database.
 """
+import math
 
 # Column labels changed between Ontario's yearly publications. These aliases
 # describe the same information, in order of preference when both are present.
@@ -43,6 +44,9 @@ def normalize_text(value):
         return ''
     if not isinstance(value, (str, int, float)) or isinstance(value, bool):
         raise ValueError("Expected a text or numeric scalar")
+    # NaN and infinity are missing/invalid numeric values, not names or titles.
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("Expected a finite numeric scalar")
 
     text = str(value).replace('\xa0', ' ')
     words = text.split()  # Without an argument, split handles any whitespace.
