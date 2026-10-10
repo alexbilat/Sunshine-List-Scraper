@@ -246,6 +246,40 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(request_page('url', not_modified_ok=True).status_code, 304)
 
     @patch('sunshine_scraper.client.request_page')
+    def test_duplicate_csv_headers_fail_instead_of_overwriting_values(self, request):
+        for duplicate in ('Salary', ' salary ', 'SALARY'):
+            with self.subTest(duplicate=duplicate):
+                request.return_value.content = (
+                    f'First Name,Last Name,Employer,Salary,Year,{duplicate}\n'
+                    'Alex,Bilat,Ontario,123456,2025,654321\n'
+                ).encode('utf-8')
+                with self.assertRaisesRegex(ScraperError, 'duplicate.*column headers'):
+                    fetch_csv_records('https://www.ontario.ca/files/new/data.csv')
+
+    @patch('sunshine_scraper.client.request_page')
+    def test_truncated_csv_rows_fail_but_explicit_blank_cells_are_allowed(self, request):
+        header = b'First Name,Last Name,Employer,Salary,Year,Job Title\n'
+        good_row = b'Alex,Bilat,Ontario,123456,2025,Developer\n'
+        for truncated in (b'Other,Bilat,Ontario,123456\n',
+                          b'Other,Bilat,Ontario,123456,2025\n'):
+            with self.subTest(row=truncated):
+                request.return_value.content = header + good_row + truncated
+                with self.assertRaisesRegex(ScraperError, 'line 3: fewer values'):
+                    fetch_csv_records('https://www.ontario.ca/files/new/data.csv')
+        # A trailing delimiter explicitly supplies an empty optional title.
+        request.return_value.content = header + b'Alex,Bilat,Ontario,123456,2025,\n'
+        rows = fetch_csv_records('https://www.ontario.ca/files/new/data.csv')
+        self.assertEqual(Disclosure.from_source_row(rows[0]).job_title, '')
+
+    @patch('sunshine_scraper.client.requests.get')
+    def test_csv_304_without_validators_fails_instead_of_skipping_a_new_source(self, get):
+        get.return_value = response(304)
+        with self.assertRaisesRegex(ScraperError, 'HTTP 304'):
+            fetch_csv_download('https://x.test/a.csv')
+        self.assertIsNone(fetch_csv_download('https://x.test/a.csv', etag='"v1"'))
+        self.assertIsNone(fetch_csv_download('https://x.test/a.csv', last_modified='Mon'))
+
+    @patch('sunshine_scraper.client.request_page')
     def test_conditional_csv_download(self, request):
         """Stored validators are sent; 304 returns None; 200 returns new validators."""
         request.return_value = Mock(status_code=304)
@@ -259,6 +293,7 @@ class RequestTests(unittest.TestCase):
                                     headers={'ETag': '"v2"', 'Last-Modified': 'later'})
         download = fetch_csv_download('https://x.test/a.csv')
         self.assertIsNone(request.call_args.kwargs['headers'])
+        self.assertFalse(request.call_args.kwargs['not_modified_ok'])
         self.assertEqual(len(download.records), 1)
         self.assertEqual((download.etag, download.last_modified), ('"v2"', 'later'))
         self.assertEqual(len(download.content_sha256), 64)
