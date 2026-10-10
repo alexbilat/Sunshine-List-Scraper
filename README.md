@@ -10,7 +10,7 @@ Instead of scraping rendered HTML tables, the script finds the datasets linked o
 2. **Skips what hasn't changed.** Before downloading, it asks Ontario whether each dataset changed since the last successful load (HTTP `304 Not Modified` for CSVs, CKAN's modification timestamp for historical resources). Unchanged datasets cost one small request.
 3. **Downloads the records.** Requests CKAN resources in batches of 100,000 until exhausted and reads complete CSV downloads for newer years. A missing advertised CSV or malformed download is reported as a failure instead of silently omitting that year.
 4. **Cleans the data.**
-   - Converts salaries to exact cents (strips `$` and `,`; rejects missing, malformed, or fractional-cent values).
+   - Converts salaries to exact cents (strips `$` and `,`; rejects missing, malformed, negative, or nonfinite values). Published fractions of a cent are rounded half-up to the nearest cent, so `111259.878` becomes `111259.88`.
    - Matches column labels despite capitalization, extra spaces, or underscores, and recognizes aliases such as `Surname`/`Last Name`, `Position`/`Job Title`, `Salary Paid`/`Salary`, and `Calendar Year`/`Year`.
    - Strips non-breaking spaces and collapses irregular whitespace in names, titles, and employers.
    - Filters out non-person records that occasionally show up in the raw data.

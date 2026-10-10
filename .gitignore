@@ -2,7 +2,6 @@
 __pycache__/
 *.py[cod]
 docs
-sunshine_scraper\__pycache__
 # Database credentials are local configuration, never source code.
 .env
 .env.*
@@ -20,6 +19,6 @@ CLAUDE.md
 /sunshine.db-wal
 /sunshine.db-shm
 
-# Learning stuff 
-learning\05-postgresql-primer.md
-learning\06-postgresql-tutorial.md
+# Local learning notes; Git patterns use forward slashes on every platform.
+/learning/05-postgresql-primer.md
+/learning/06-postgresql-tutorial.md
