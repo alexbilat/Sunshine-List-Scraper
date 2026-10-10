@@ -176,8 +176,12 @@ def fetch_csv_download(url, *, etag=None, last_modified=None, **request_options)
         headers['If-None-Match'] = etag
     if last_modified:
         headers['If-Modified-Since'] = last_modified
-    response = request_page(url, headers=headers or None, not_modified_ok=True, **request_options)
+    response = request_page(url, headers=headers or None, not_modified_ok=bool(headers),
+                            **request_options)
     if response.status_code == 304:
+        # A fresh load needs a body; no stored validator means nothing to skip.
+        if not headers:
+            raise ScraperError(f"CSV {url} returned HTTP 304 without stored validators")
         return None
     return CsvDownload(records=parse_csv_records(response.content, url),
                        etag=response.headers.get('ETag'),
@@ -190,7 +194,12 @@ def parse_csv_records(content, url):
     try:
         text = content.decode('utf-8-sig')
         reader = csv.DictReader(io.StringIO(text, newline=''), strict=True)
-        columns = {normalize_field_name(name) for name in (reader.fieldnames or [])}
+        normalized_columns = [normalize_field_name(name) for name in (reader.fieldnames or [])]
+        columns = set(normalized_columns)
+        # DictReader overwrites repeated headers; normalization can also make
+        # differently spelled headers collide during disclosure processing.
+        if len(columns) != len(normalized_columns):
+            raise ScraperError(f"CSV {url} has duplicate disclosure column headers")
         required_fields = ('first_name', 'last_name', 'employer', 'year', 'salary')
         missing = [name for name in required_fields
                    if not columns.intersection(FIELD_ALIASES[name])]
@@ -200,6 +209,10 @@ def parse_csv_records(content, url):
         for row in reader:
             if None in row:
                 raise ScraperError(f"CSV {url}, line {reader.line_num}: more values than column headers")
+            # Empty cells are valid input for row validation, but absent cells
+            # indicate a broken CSV row. Never accept a truncated dataset.
+            if any(value is None for value in row.values()):
+                raise ScraperError(f"CSV {url}, line {reader.line_num}: fewer values than column headers")
             records.append(row)
         logger.debug("CSV %s: fetched %s rows", url, len(records))
         return records
