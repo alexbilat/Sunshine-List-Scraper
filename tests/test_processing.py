@@ -7,6 +7,7 @@ they must keep passing so validation never becomes weaker.
 import unittest
 
 from sunshine_scraper.storage.models import Disclosure
+from sunshine_scraper.processing import normalize_text
 from sunshine_scraper.sync import validate_rows
 
 
@@ -21,6 +22,16 @@ def person(**changes):
 
 
 class ValidationTests(unittest.TestCase):
+    def test_nonfinite_numbers_cannot_be_stored_as_names_or_titles(self):
+        for field in ('First Name', 'Last Name', 'Employer', 'Job Title'):
+            for value in (float('nan'), float('inf'), float('-inf')):
+                with self.subTest(field=field, value=value):
+                    with self.assertRaisesRegex(ValueError, 'finite numeric scalar'):
+                        Disclosure.from_source_row(person(**{field: value}))
+        # Finite numeric source values retain the existing scalar conversion.
+        self.assertEqual(normalize_text(123), '123')
+        self.assertEqual(normalize_text(123.5), '123.5')
+
     def test_whitespace_before_bom_does_not_hide_required_column(self):
         disclosure = Disclosure.from_source_row({
             ' \t﻿First_Name ': 'Alex',
