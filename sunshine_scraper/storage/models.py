@@ -1,6 +1,6 @@
 """Database-ready disclosures: exact money and repeatable content identity."""
 from dataclasses import dataclass
-from decimal import (ROUND_HALF_UP, Decimal, DecimalException, Inexact, InvalidOperation,
+from decimal import (ROUND_HALF_UP, Context, Decimal, DecimalException, Inexact, InvalidOperation,
                      localcontext)
 from hashlib import sha256
 import json
@@ -29,18 +29,20 @@ def salary_to_cents(value):
         raise ValueError("invalid salary") from error
     if not amount.is_finite() or amount < 0:
         raise ValueError("salary must be finite and nonnegative")
-    if amount > Decimal(MAX_BIGINT) / 100:
-        raise ValueError("salary exceeds PostgreSQL BIGINT cents capacity")
-    # Enough precision for all input digits; multiplying by 100 must be exact.
-    with localcontext() as context:
-        context.prec = max(28, len(amount.as_tuple().digits) + 2)
-        context.traps[Inexact] = True
+    # Own the arithmetic settings: a caller's lower precision or rounding traps
+    # must not change accepted salaries or their exact cents representation.
+    with localcontext(Context(prec=max(28, len(amount.as_tuple().digits) + 2))) as context:
         try:
+            if amount > Decimal(MAX_BIGINT) / 100:
+                raise ValueError("salary exceeds PostgreSQL BIGINT cents capacity")
+            # Enough precision for all input digits; multiplying must be exact.
+            context.traps[Inexact] = True
             cents = amount * 100
+            # Only the final, deliberate half-up rounding may lose precision.
+            context.traps[Inexact] = False
+            rounded = cents.quantize(Decimal(1), rounding=ROUND_HALF_UP)
         except DecimalException as error:
             raise ValueError("salary cannot be represented as exact cents") from error
-    # Outside the Inexact trap: rounding is intentionally inexact.
-    rounded = cents.quantize(Decimal(1), rounding=ROUND_HALF_UP)
     if rounded > MAX_BIGINT:
         raise ValueError("salary exceeds PostgreSQL BIGINT cents capacity")
     return int(rounded)

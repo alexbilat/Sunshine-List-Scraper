@@ -3,7 +3,7 @@
 No PostgreSQL server, source downloads, or installed Psycopg are required.
 """
 from dataclasses import replace
-from decimal import Decimal
+from decimal import Decimal, Inexact, Rounded, ROUND_DOWN, localcontext
 import os
 import subprocess
 import sys
@@ -50,6 +50,23 @@ class DisclosureTests(unittest.TestCase):
                                 ('1.005', 101), ('1.004', 100), ('0.001', 0)]:
             with self.subTest(value=value):
                 self.assertEqual(salary_to_cents(value), expected)
+
+    def test_money_is_independent_of_the_callers_decimal_context(self):
+        with localcontext() as context:
+            context.prec = 6
+            context.rounding = ROUND_DOWN
+            context.traps[Inexact] = True
+            context.traps[Rounded] = True
+            for value, expected in [('111259.878', 11125988),
+                                    ('1.005', 101), ('92233720368547758.07', MAX_BIGINT)]:
+                with self.subTest(value=value):
+                    self.assertEqual(salary_to_cents(value), expected)
+            with self.assertRaises(ValueError):
+                salary_to_cents('92233720368547758.08')
+            self.assertEqual(context.prec, 6)
+            self.assertEqual(context.rounding, ROUND_DOWN)
+            self.assertTrue(context.traps[Inexact])
+            self.assertTrue(context.traps[Rounded])
 
     def test_money_rejects_lossy_invalid_or_unrepresentable_values(self):
         for value in [0.29, True, None, '', 'NaN', 'Infinity', '-1',
