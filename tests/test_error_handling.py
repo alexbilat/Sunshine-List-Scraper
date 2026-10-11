@@ -299,6 +299,24 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(len(download.content_sha256), 64)
 
     @patch('sunshine_scraper.client.request_page')
+    def test_ckan_version_falls_back_when_primary_timestamp_is_blank_or_invalid(self, request):
+        for primary in (None, '', ' \t ', 123, [], {}):
+            with self.subTest(primary=primary):
+                request.return_value.json.return_value = {
+                    'success': True, 'result': {'last_modified': primary,
+                                               'metadata_modified': ' 2024-03-25T12:00:00 '}}
+                self.assertEqual(fetch_ckan_resource_version('https://x.test/action/datastore_search', 'a'),
+                                 '2024-03-25T12:00:00')
+        request.return_value.json.return_value = {
+            'success': True, 'result': {'last_modified': ' 2024-03-26T12:00:00 ',
+                                       'metadata_modified': 'older'}}
+        self.assertEqual(fetch_ckan_resource_version('https://x.test/action/datastore_search', 'a'),
+                         '2024-03-26T12:00:00')
+        request.return_value.json.return_value = {
+            'success': True, 'result': {'last_modified': ' ', 'metadata_modified': 123}}
+        self.assertIsNone(fetch_ckan_resource_version('https://x.test/action/datastore_search', 'a'))
+
+    @patch('sunshine_scraper.client.request_page')
     def test_ckan_version_uses_resource_show(self, request):
         """CKAN's own modification time is read from resource_show, beside datastore_search."""
         request.return_value.json.return_value = {

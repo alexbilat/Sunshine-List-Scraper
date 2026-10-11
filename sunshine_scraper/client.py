@@ -239,10 +239,12 @@ def fetch_ckan_resource_version(api_url, resource_id, **request_options):
     result = data.get('result')
     if not isinstance(result, dict):
         raise ScraperError(f"Resource {resource_id}: metadata response has no result object")
-    version = result.get('last_modified') or result.get('metadata_modified')
-    if not isinstance(version, str) or not version.strip():
-        return None
-    return version
+    # Blank or malformed primary timestamps must not hide a usable fallback.
+    for field in ('last_modified', 'metadata_modified'):
+        version = result.get(field)
+        if isinstance(version, str) and version.strip():
+            return version.strip()
+    return None
 
 
 def records_sha256(records):
