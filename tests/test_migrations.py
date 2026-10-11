@@ -19,6 +19,20 @@ def write_files(directory, names):
 
 
 class MigrationFileTests(unittest.TestCase):
+    def test_missing_or_empty_migration_directory_cannot_pass_schema_checks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            file_path = root / 'not_a_directory.txt'
+            file_path.write_text('not a migration directory', encoding='utf-8')
+            for path in (root / 'missing', file_path, root):
+                with self.subTest(path=path):
+                    with self.assertRaises(MigrationError):
+                        load_migrations(path)
+                    connection = Mock()
+                    with self.assertRaises(MigrationError):
+                        ensure_schema_current(connection, path)
+                    connection.execute.assert_not_called()
+
     def test_repository_migrations_load_in_version_order(self):
         migrations = load_migrations()
         self.assertEqual([migration.version for migration in migrations][:2], ['001', '002'])

@@ -59,8 +59,11 @@ class Migration:
 
 def load_migrations(directory=MIGRATIONS_DIRECTORY):
     """Return migration files sorted by version; reject ambiguous numbering."""
+    directory = Path(directory)
+    if not directory.is_dir():
+        raise MigrationError(f"Migration directory is missing or is not a directory: {directory}")
     migrations = {}
-    for path in sorted(Path(directory).glob('*.sql')):
+    for path in sorted(directory.glob('*.sql')):
         match = FILENAME_PATTERN.fullmatch(path.name)
         if not match:
             raise MigrationError(f"Unexpected migration filename: {path.name}")
@@ -68,6 +71,9 @@ def load_migrations(directory=MIGRATIONS_DIRECTORY):
         if version in migrations:
             raise MigrationError(f"Two migration files use version {version}")
         migrations[version] = Migration(version, path.name, path.read_text(encoding='utf-8'))
+    # A missing checkout/package must not be mistaken for a current schema.
+    if not migrations:
+        raise MigrationError(f"No SQL migration files found in {directory}")
     return [migrations[version] for version in sorted(migrations)]
 
 
