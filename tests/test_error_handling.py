@@ -27,7 +27,7 @@ import matplotlib
 matplotlib.use('Agg')
 from sunshine_scraper.client import (request_page, fetch_all_records, fetch_csv_download,
                                     fetch_csv_records, fetch_ckan_resource_version,
-                                    discover_resource_links)
+                                    discover_resource_links, resource_id_from_link)
 from sunshine_scraper.errors import ScraperError
 from sunshine_scraper.pipeline import run
 from sunshine_scraper.export import write_records
@@ -60,6 +60,26 @@ def person(**changes):
 
 class RequestTests(unittest.TestCase):
     """Exercise HTTP recovery, discovery, and API pagination without a live server."""
+
+    def test_resource_links_require_a_nonempty_identifier(self):
+        for link in ('', 'https://x.test/', 'https://x.test/dataset/x/resource/',
+                     'data.csv', 'https://x.test/data.csv', 'https://x.test/files//data.csv'):
+            with self.subTest(link=link):
+                with self.assertRaisesRegex(ScraperError, 'resource identifier'):
+                    resource_id_from_link(link)
+        self.assertEqual(resource_id_from_link('https://x.test/dataset/x/resource/abc/?q=1'), 'abc')
+        self.assertEqual(resource_id_from_link('https://x.test/files/abc/data.csv?q=1'), 'abc')
+
+    @patch('sunshine_scraper.client.request_page')
+    def test_discovery_ignores_resource_words_outside_a_resource_path(self, request):
+        request.return_value.content = b'''
+            <a href="/page/public-sector-salary-disclosure?resource=abc">query</a>
+            <a href="/public-sector-salary-disclosure/resources">collection</a>
+            <a href="/public-sector-salary-disclosure/resource/">missing ID</a>
+            <a href="/public-sector-salary-disclosure/resource/abc">dataset</a>
+        '''
+        self.assertEqual(discover_resource_links('https://www.ontario.ca/page/disclosure'),
+                         ['https://www.ontario.ca/public-sector-salary-disclosure/resource/abc'])
 
     # Stacked patches inject mocks bottom-up: get first, then sleep.
     # Replacing sleep lets us inspect delays without actually waiting.

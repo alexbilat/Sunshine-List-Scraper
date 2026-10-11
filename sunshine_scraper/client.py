@@ -30,8 +30,12 @@ def resource_id_from_link(link):
     """Identify a CKAN resource page or the UUID directory of a CSV download."""
     parts = urlsplit(link).path.rstrip('/').split('/')
     if parts[-1].lower().endswith('.csv'):
-        return parts[-2]
-    return parts[-1]
+        resource_id = parts[-2] if len(parts) >= 2 else ''
+    else:
+        resource_id = parts[-1]
+    if not resource_id or resource_id.casefold() == 'resource':
+        raise ScraperError(f"Link has no resource identifier: {link}")
+    return resource_id
 
 
 def request_page(url, *, params=None, headers=None, not_modified_ok=False,
@@ -104,8 +108,11 @@ def discover_resource_links(url, **request_options):
             if source not in modern_sources:
                 modern_sources.append(source)
             continue
-        lowercase_href = href.lower()
-        if 'public-sector-salary-disclosure' not in lowercase_href or 'resource' not in lowercase_href:
+        # Navigation links or query strings mentioning "resource" are not
+        # CKAN datasets. Require the resource segment followed by an identifier.
+        lowercase_path = urlsplit(href).path.lower()
+        if ('public-sector-salary-disclosure' not in lowercase_path
+                or not re.search(r'/resource/[^/]+/?$', lowercase_path)):
             continue
         # Ignore query strings and trailing slashes when identifying a resource.
         resource_id = resource_id_from_link(href)
