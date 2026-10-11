@@ -36,29 +36,29 @@ def create_charts(yearly_summary, top_titles, yearly_chart_path, titles_chart_pa
     counts = [summary.people for summary in ordered]
 
     figure, count_axis = plt.subplots(figsize=(14, 6))
-    count_axis.bar(years_sorted, counts, color='steelblue', alpha=0.4, label='# of People')
-    count_axis.set_ylabel('Number of People', color='steelblue')
-    count_axis.yaxis.set_major_locator(mticker.MaxNLocator(integer=True))
-    count_axis.tick_params(axis='x', rotation=45)
-
-    # Headcount and salary have different units. twinx shares the horizontal
-    # year positions but supplies a separate salary scale on the right.
-    salary_axis = count_axis.twinx()
-    salary_axis.plot(years_sorted, averages, color='crimson', marker='o',
-                     linewidth=2, label='Avg Salary')
-    salary_axis.set_ylabel('Average Salary ($)', color='crimson')
-
-    def format_salary_tick(value, position):
-        # Matplotlib passes a tick position too; only its numeric value is needed.
-        return f'${value:,.0f}'
-
-    salary_axis.yaxis.set_major_formatter(mticker.FuncFormatter(format_salary_tick))
-    plt.title('Ontario Sunshine List — Average Salary & Headcount by Year')
-    figure.tight_layout()  # Adjust spacing to keep labels within the image.
     try:
+        count_axis.bar(years_sorted, counts, color='steelblue', alpha=0.4, label='# of People')
+        count_axis.set_ylabel('Number of People', color='steelblue')
+        count_axis.yaxis.set_major_locator(mticker.MaxNLocator(integer=True))
+        count_axis.tick_params(axis='x', rotation=45)
+
+        # Headcount and salary have different units. twinx shares the horizontal
+        # year positions but supplies a separate salary scale on the right.
+        salary_axis = count_axis.twinx()
+        salary_axis.plot(years_sorted, averages, color='crimson', marker='o',
+                         linewidth=2, label='Avg Salary')
+        salary_axis.set_ylabel('Average Salary ($)', color='crimson')
+
+        def format_salary_tick(value, position):
+            # Matplotlib passes a tick position too; only its numeric value is needed.
+            return f'${value:,.0f}'
+
+        salary_axis.yaxis.set_major_formatter(mticker.FuncFormatter(format_salary_tick))
+        plt.title('Ontario Sunshine List — Average Salary & Headcount by Year')
+        figure.tight_layout()  # Adjust spacing to keep labels within the image.
         figure.savefig(yearly_chart_path, dpi=150)
     finally:
-        # Release the figure even if saving fails (e.g. a missing directory).
+        # Rendering and layout can fail before saving; always release the figure.
         plt.close(figure)
 
     if not top_titles:
@@ -71,12 +71,12 @@ def create_charts(yearly_summary, top_titles, yearly_chart_path, titles_chart_pa
     values = [title.appearances for title in reversed(top_titles)]
 
     figure, title_axis = plt.subplots(figsize=(12, 6))
-    title_axis.barh(labels, values, color='teal')
-    title_axis.set_xlabel('Number of Appearances')
-    title_axis.xaxis.set_major_locator(mticker.MaxNLocator(integer=True))
-    title_axis.set_title('Top 10 Most Common Job Titles on the Sunshine List')
-    figure.tight_layout()
     try:
+        title_axis.barh(labels, values, color='teal')
+        title_axis.set_xlabel('Number of Appearances')
+        title_axis.xaxis.set_major_locator(mticker.MaxNLocator(integer=True))
+        title_axis.set_title('Top 10 Most Common Job Titles on the Sunshine List')
+        figure.tight_layout()
         figure.savefig(titles_chart_path, dpi=150)
     finally:
         plt.close(figure)

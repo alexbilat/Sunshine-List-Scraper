@@ -3,6 +3,7 @@ from decimal import Decimal
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import matplotlib
 matplotlib.use('Agg')
@@ -13,6 +14,24 @@ from sunshine_scraper.storage.models import TitleCount, YearSummary
 
 
 class ReportingTests(unittest.TestCase):
+    def test_layout_failure_closes_each_chart_figure(self):
+        from matplotlib.figure import Figure
+
+        # Fail both the first chart's layout and the second chart's layout.
+        # File saving is patched because the failure happens before saving.
+        for layouts in ([ValueError('layout failed')],
+                        [None, ValueError('layout failed')]):
+            with self.subTest(chart=len(layouts)), \
+                    patch.object(Figure, 'tight_layout', side_effect=layouts), \
+                    patch.object(Figure, 'savefig'):
+                try:
+                    with self.assertRaisesRegex(ValueError, 'layout failed'):
+                        create_charts([YearSummary(2024, 1, Decimal('12000000'))],
+                                      [TitleCount('Developer', 1)], 'yearly.png', 'titles.png')
+                    self.assertEqual(plt.get_fignums(), [])
+                finally:
+                    plt.close('all')
+
     def test_year_without_average_still_writes_charts(self):
         """A missing average (no salaries) is drawn as zero instead of failing."""
         with tempfile.TemporaryDirectory() as directory:
