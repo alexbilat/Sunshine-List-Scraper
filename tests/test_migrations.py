@@ -6,10 +6,10 @@ real database is covered by tests/test_postgres_integration.py.
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from sunshine_scraper.storage.migrations import (Migration, MigrationError,
-                                                 ensure_schema_current, load_migrations,
+                                                 baseline, ensure_schema_current, load_migrations,
                                                  pending_migrations)
 
 
@@ -89,6 +89,32 @@ class PendingTests(unittest.TestCase):
         with patch('sunshine_scraper.storage.migrations.applied_migrations', return_value={}):
             with self.assertRaisesRegex(MigrationError, 'storage migrate'):
                 ensure_schema_current(Mock())
+
+    def test_baseline_rejects_inconsistent_existing_history(self):
+        available = [self.first, self.second]
+        for applied in ({'001': 'f' * 64},
+                        {'001': self.first.checksum, '003': 'a' * 64},
+                        {'002': self.second.checksum}):
+            with self.subTest(applied=applied), \
+                    patch('sunshine_scraper.storage.migrations.load_migrations', return_value=available), \
+                    patch('sunshine_scraper.storage.migrations.applied_migrations', return_value=applied), \
+                    patch('sunshine_scraper.storage.migrations.record_migration') as record:
+                connection = MagicMock()
+                with self.assertRaises(MigrationError):
+                    baseline(connection, '002')
+                record.assert_not_called()
+                # An error still releases the advisory lock.
+                self.assertIn('pg_advisory_unlock', connection.execute.call_args.args[0])
+
+    def test_baseline_preserves_valid_history_and_records_only_new_versions(self):
+        with patch('sunshine_scraper.storage.migrations.load_migrations',
+                   return_value=[self.first, self.second]), \
+                patch('sunshine_scraper.storage.migrations.applied_migrations',
+                      return_value={'001': self.first.checksum}), \
+                patch('sunshine_scraper.storage.migrations.record_migration') as record:
+            connection = MagicMock()
+            self.assertEqual(baseline(connection, '002'), ['002_b.sql'])
+            record.assert_called_once_with(connection, self.second)
 
 
 class CommandTests(unittest.TestCase):

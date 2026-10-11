@@ -169,6 +169,9 @@ def baseline(connection, through_version, directory=MIGRATIONS_DIRECTORY):
     try:
         connection.execute(CREATE_MIGRATION_TABLE)
         already = applied_migrations(connection)
+        # Baseline adopts hand-applied tables; it must not bypass checksum,
+        # unknown-version, or ordering checks on history already recorded.
+        pending_migrations(available, already)
         recorded = []
         with connection.transaction():
             for migration in targets:

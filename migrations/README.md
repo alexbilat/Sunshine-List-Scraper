@@ -31,4 +31,5 @@ Running it again applies only files the database has not received.
 - `migrate --status` lists applied and pending files without changing anything.
 - `migrate --baseline 001` records files up to `001` as applied without running
   them, for databases where they were applied by hand. It refuses unless the
-  tables those files create already exist.
+  tables those files create already exist. Existing migration history must also
+  match the available files and their checksums, just as for a normal migration.
