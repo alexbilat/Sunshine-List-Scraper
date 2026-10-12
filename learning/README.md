@@ -11,6 +11,8 @@ Read these chapters in order:
 6. [Hands-on PostgreSQL tutorial](06-postgresql-tutorial.md): lessons using this project.
 7. [The web API](07-api.md): how HTTP APIs work and how the read-only JSON API
    in `sunshine_scraper/api/` serves the database to browsers and other programs.
+8. [The web page and API protection](08-frontend-and-safety.md): the browser
+   frontend, rate limiting, query slots and timeouts, and security headers.
 
 Chapters 1–3 were written for the earlier in-memory pipeline; each starts with a
 note on what changed. The SQLite practice module (`sunshine_scraper/database.py`)

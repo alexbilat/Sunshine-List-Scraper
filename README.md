@@ -134,6 +134,7 @@ The [learning folder](learning/README.md) explains the app for users and contrib
 - [Python constructs, errors, logging, and tests](learning/03-python-and-errors.md)
 - [PostgreSQL architecture and decisions](learning/04-postgresql-architecture.md)
 - [The web API: how it works and what was built](learning/07-api.md)
+- [The web page and API protection](learning/08-frontend-and-safety.md)
 
 Chapters 1–3 describe the earlier in-memory pipeline; chapter 4 describes how
 the database replaced it.
@@ -214,7 +215,9 @@ uses the same `SUNSHINE_DATABASE_URL` and runs separately from the scraper:
 uvicorn sunshine_scraper.api.app:app --reload
 ```
 
-Open `http://127.0.0.1:8000/docs` to try the endpoints interactively.
+Open `http://127.0.0.1:8000/` for the web page: pick a year to see its top
+salaries, browse yearly totals with a chart, or list the most common job
+titles. `http://127.0.0.1:8000/docs` lets you try the raw endpoints.
 
 | Endpoint | Returns |
 | --- | --- |
@@ -226,3 +229,15 @@ Open `http://127.0.0.1:8000/docs` to try the endpoints interactively.
 Money is returned as exact integer cents plus a display string. Invalid input
 returns 422; an unavailable database returns 503 without connection details.
 [Chapter 7](learning/07-api.md) explains the design and the tests.
+
+Protection (limits are set in `config.py`):
+
+- Each client address may make 60 API requests per minute; more get `429`
+  with a `Retry-After` header.
+- At most 4 requests query PostgreSQL at once (others queue briefly), and any
+  query is cancelled after 5 seconds.
+- Responses carry a strict Content-Security-Policy and other browser safety
+  headers.
+
+[Chapter 8](learning/08-frontend-and-safety.md) explains the page and these
+protections, including what to change before exposing it beyond your computer.
