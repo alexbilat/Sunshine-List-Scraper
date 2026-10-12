@@ -538,7 +538,7 @@ class EntryPointTests(unittest.TestCase):
         """main translates completion, failures, and user interruption into exit codes."""
         # Load the script as a module so we can call main without exiting Python.
         # Its __main__ guard prevents the real scrape from running on import.
-        spec = importlib.util.spec_from_file_location('entry', 'Sunshine_List_Scaper.py')
+        spec = importlib.util.spec_from_file_location('entry', 'sunshine_list_scraper.py')
         entry = importlib.util.module_from_spec(spec); spec.loader.exec_module(entry)
         # Replace entry.run: test only the CLI's mapping of outcomes to exit codes.
         for result, code in [(True, 0), (False, 1)]:
