@@ -273,7 +273,9 @@ database; those tests create and drop their own schemas in it.
 | Some datasets failed (exit code 1) | Usually a temporary network problem. Run the scraper again; it retries only what's missing. |
 | `publish_site.py` reports `git push failed` | Make sure `git push` works from the project folder. |
 
-## Data and licence
+## Licence
+
+The code is released under the [MIT License](LICENSE).
 
 Salary data © King's Printer for Ontario, published under the
 [Open Government Licence – Ontario](https://www.ontario.ca/page/open-government-licence-ontario).
