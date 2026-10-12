@@ -27,6 +27,24 @@ retry_backoff = 1
 # it in the SUNSHINE_DATABASE_URL environment variable (see .env.example).
 full_refresh = False
 
+# Web API protection (sunshine_scraper/api). Each client address may send up
+# to api_rate_limit_requests requests per api_rate_limit_window seconds; extra
+# requests get HTTP 429 with a Retry-After header. A short burst is allowed,
+# but the long-run rate cannot exceed the limit. Limits are per server process.
+api_rate_limit_requests = 60
+api_rate_limit_window = 60
+
+# Milliseconds a single API query may run before PostgreSQL cancels it and the
+# client gets 503. Keeps one slow query from holding a worker indefinitely.
+api_statement_timeout_ms = 5000
+
+# How many API requests may query PostgreSQL at once; others queue for up to
+# api_query_wait_seconds, then get 503. Many simultaneous heavy queries slow
+# each other down until they all hit the timeout above, so a small number
+# that finishes quickly serves more people than a large number that doesn't.
+api_max_concurrent_queries = 4
+api_query_wait_seconds = 10
+
 # INFO shows progress plus warnings/errors. DEBUG adds page/row diagnostics.
 # WARNING hides ordinary progress; ERROR shows only failures.
 # CRITICAL is available in Python but is not used by this scraper.

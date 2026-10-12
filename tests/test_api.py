@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, call, patch
 from fastapi.testclient import TestClient
 import psycopg
 
+import config
 from sunshine_scraper.api.app import app, get_open_reader
 from sunshine_scraper.storage.connection import DatabaseAccessError
 from sunshine_scraper.storage.models import SalaryResult, TitleCount, YearSummary
@@ -47,6 +48,8 @@ class DataRouteTests(unittest.TestCase):
         # Routes call open_reader(); the fake one yields the in-memory reader.
         app.dependency_overrides[get_open_reader] = lambda: self.open_fake_reader
         self.addCleanup(app.dependency_overrides.clear)
+        # The rate limiter is shared app state; start each test with a full budget.
+        app.state.rate_limiter.reset()
         self.client = TestClient(app)
 
     def open_fake_reader(self):
@@ -104,6 +107,7 @@ class ConnectionTests(unittest.TestCase):
     """Run the real get_connection dependency against a patched driver."""
 
     def setUp(self):
+        app.state.rate_limiter.reset()
         self.client = TestClient(app)
         patcher = patch.dict(os.environ, {'SUNSHINE_DATABASE_URL': SECRET_URL})
         patcher.start()
@@ -131,8 +135,13 @@ class ConnectionTests(unittest.TestCase):
         response = self.client.get('/api/health')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'status': 'ok'})
-        self.assertEqual(connection.execute.call_args_list,
-                         [call('SET TRANSACTION READ ONLY'), call('SELECT 1')])
+        # Read-only first, then the per-transaction query time cap (passed as
+        # a parameter, not pasted into the SQL), then the actual query.
+        self.assertEqual(connection.execute.call_args_list, [
+            call('SET TRANSACTION READ ONLY'),
+            call("SELECT set_config('statement_timeout', %s, true)",
+                 (f'{config.api_statement_timeout_ms}ms',)),
+            call('SELECT 1')])
 
     def test_missing_database_url_is_503(self):
         with patch.dict(os.environ, clear=True):
@@ -157,7 +166,7 @@ class ConnectionTests(unittest.TestCase):
         # The connection opens, then the query itself fails. open_connection
         # must still translate the driver error into DatabaseAccessError.
         self.patched_connection(execute_side_effect=[
-            None, psycopg.errors.UndefinedTable(f'no table at {SECRET_URL}')])
+            None, None, psycopg.errors.UndefinedTable(f'no table at {SECRET_URL}')])
         self.assert_unavailable_without_secrets('/api/years')
 
 
