@@ -2,3 +2,7 @@ requests
 beautifulsoup4
 matplotlib
 psycopg[binary]>=3.2,<4
+fastapi
+uvicorn[standard]
+# Test-only: lets fastapi.testclient send requests to the app in memory.
+httpx2

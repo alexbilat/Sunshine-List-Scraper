@@ -133,6 +133,7 @@ The [learning folder](learning/README.md) explains the app for users and contrib
 - [Follow one resource link and disclosure](learning/02-follow-one-record.md)
 - [Python constructs, errors, logging, and tests](learning/03-python-and-errors.md)
 - [PostgreSQL architecture and decisions](learning/04-postgresql-architecture.md)
+- [The web API: how it works and what was built](learning/07-api.md)
 
 Chapters 1–3 describe the earlier in-memory pipeline; chapter 4 describes how
 the database replaced it.
@@ -203,3 +204,25 @@ Keep dumps outside the repository.
 The ordinary offline test command needs no database. Real PostgreSQL tests are
 opt-in through `SUNSHINE_TEST_DATABASE_URL`, which must point at a dedicated test
 database; each test creates and drops its own schema there.
+
+## Web API
+
+A read-only JSON API serves the database to browsers and other programs. It
+uses the same `SUNSHINE_DATABASE_URL` and runs separately from the scraper:
+
+```powershell
+uvicorn sunshine_scraper.api.app:app --reload
+```
+
+Open `http://127.0.0.1:8000/docs` to try the endpoints interactively.
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /api/health` | `{"status": "ok"}` when PostgreSQL answers |
+| `GET /api/years` | Headcount and average salary per year |
+| `GET /api/titles/top?limit=10` | Most common job titles |
+| `GET /api/salaries/top?year=2024&limit=10` | Highest salaries for one year |
+
+Money is returned as exact integer cents plus a display string. Invalid input
+returns 422; an unavailable database returns 503 without connection details.
+[Chapter 7](learning/07-api.md) explains the design and the tests.
