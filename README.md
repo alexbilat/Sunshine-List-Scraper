@@ -1,85 +1,273 @@
 # Ontario Sunshine List Scraper
 
-A Python script that pulls every public record from the [Ontario Public Sector Salary Disclosure](https://www.ontario.ca/page/public-sector-salary-disclosure) ("Sunshine List") - every public employee in Ontario who earned over $100,000 in a given year - stores it in a PostgreSQL database, and exports a clean, deduplicated dataset with summary charts.
+Downloads Ontario's [Public Sector Salary Disclosure](https://www.ontario.ca/page/public-sector-salary-disclosure)
+(the "Sunshine List": every public sector employee paid $100,000 or more in a
+year, from 1996 to today), stores it in PostgreSQL, and lets you explore it
+through a website, a JSON API, a TSV export, and summary charts.
 
-Instead of scraping rendered HTML tables, the script finds the datasets linked on Ontario's disclosure page. Historical resources are read through Ontario's [CKAN open data API](https://data.ontario.ca/api/3/action/datastore_search); newer years are downloaded as English CSV files using Ontario's [official download list](https://www.ontario.ca/public-sector-salary-disclosure_artifacts/pssdfiles.json).
+**Live site:** <https://alexbilat.github.io/Sunshine-List-Scraper/>
 
-## What it does
+![Headcount and average salary by year](Example_output/chart_yearly.png)
 
-1. **Finds the published datasets.** Collects historical CKAN resource links and resolves newer main-list/addendum pages to their English CSV downloads. New years are included when Ontario adds them to the disclosure page and download list; the latest year and file addresses are not hardcoded.
-2. **Skips what hasn't changed.** Before downloading, it asks Ontario whether each dataset changed since the last successful load (HTTP `304 Not Modified` for CSVs, CKAN's modification timestamp for historical resources). Unchanged datasets cost one small request.
-3. **Downloads the records.** Requests CKAN resources in batches of 100,000 until exhausted and reads complete CSV downloads for newer years. A missing advertised CSV or malformed download is reported as a failure instead of silently omitting that year.
-4. **Cleans the data.**
-   - Converts salaries to exact cents (strips `$` and `,`; rejects missing, malformed, negative, or nonfinite values). Published fractions of a cent are rounded half-up to the nearest cent, so `111259.878` becomes `111259.88`.
-   - Matches column labels despite capitalization, extra spaces, or underscores, and recognizes aliases such as `Surname`/`Last Name`, `Position`/`Job Title`, `Salary Paid`/`Salary`, and `Calendar Year`/`Year`.
-   - Strips non-breaking spaces and collapses irregular whitespace in names, titles, and employers.
-   - Filters out non-person records that occasionally show up in the raw data.
-5. **Stores it in PostgreSQL.** Each dataset is saved in its own transaction. A disclosure is identified by its contents (name, title, employer, year, salary; case-insensitive): one already stored is refreshed with the newest spelling, and anything new is added. Nothing is deleted, and every dataset a disclosure appeared in is remembered.
-6. **Outputs the results from the database.**
-   - A tab-separated `output.txt` file with every record, sorted by salary (highest first).
-   - A console summary of average salary and number of people per year.
-   - Two charts: headcount and average salary by year, and the 10 most common job titles.
+## Features
 
-![Example_Output](Example_output/chart_titles.png)
-![Example_Output](Example_output/chart_yearly.png)
+- **Complete, automatic collection.** Finds every published dataset on
+  Ontario's disclosure page: historical years through Ontario's CKAN open-data
+  API, newer years as official CSV downloads. New years are picked up
+  automatically; no years or file IDs are hardcoded.
+- **Fast updates.** Later runs ask Ontario what changed and skip everything
+  else, so a routine update takes about a minute.
+- **Clean data.** Salaries are stored as exact cents; column-name variations,
+  stray whitespace, and non-person rows are handled; duplicates are merged.
+- **Website.** Browse the top salaries for any year, yearly headcount and
+  average salary, and the most common job titles.
+- **Free, always-up public site.** One command publishes the website as static
+  files to GitHub Pages; it needs no server or database to stay online.
+- **Read-only JSON API** for local use, with interactive docs, rate limiting,
+  and query limits.
+- **Exports.** `output.txt` (all ~3.3 million records, tab-separated) plus two charts.
 
+## How it works
 
+```
+                         ┌───────────── your computer ─────────────┐
+ Ontario open data ──►   scraper ──► PostgreSQL ──► local website + JSON API
+ (CKAN API + CSVs)                       │          (while you run it)
+                                         ├──► output.txt + charts
+                                         └──► publish_site.py ──► GitHub Pages
+                         └─────────────────────────────────────────┘   (public, always up)
+```
+
+- The **scraper** (`sunshine_list_scraper.py`) syncs Ontario's data into your
+  local PostgreSQL database and exits.
+- The **local web server** serves the website and the live JSON API from that
+  database, only while you have it running.
+- **`publish_site.py`** turns the database into a static copy of the website
+  (pre-computed JSON files) and pushes it to GitHub Pages. The public site
+  looks and works the same as the local one, but never contacts your computer,
+  so it stays up when your PC is off. It changes only when you publish.
+
+---
 
 ## Setup
 
-You need a running PostgreSQL server (version 14 or newer) and a database owned
-by a role that can create tables. Create them in `psql` as the `postgres`
-superuser:
+You need:
+
+| Requirement | Notes |
+| --- | --- |
+| Python 3.12+ | [python.org](https://www.python.org/downloads/) |
+| PostgreSQL 14+ | [postgresql.org/download](https://www.postgresql.org/download/). The database needs about **2.5 GB** of disk space. |
+| Git | To clone the repository. |
+
+Commands below are for **Windows PowerShell**; macOS/Linux equivalents follow
+each block where they differ. Run everything from the project folder.
+
+### 1. Get the code and install dependencies
+
+```powershell
+git clone https://github.com/alexbilat/Sunshine-List-Scraper.git
+cd Sunshine-List-Scraper
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+```bash
+# macOS / Linux
+source .venv/bin/activate
+```
+
+> If PowerShell refuses to run `Activate.ps1`, run
+> `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+> Activate the virtual environment again in every new terminal.
+
+### 2. Create the database
+
+Open `psql` as the `postgres` superuser (on Windows: **SQL Shell (psql)** in
+the Start menu) and run:
 
 ```sql
 CREATE ROLE sunshine LOGIN PASSWORD 'choose-a-password';
 CREATE DATABASE sunshine OWNER sunshine;
 ```
 
-Then install, point the scraper at the database, create the tables, and run:
+### 3. Tell the project where the database is
+
+The connection URL is read **only** from the `SUNSHINE_DATABASE_URL`
+environment variable, never from a file, so the password can't be committed by
+accident. `.env.example` shows the format.
 
 ```powershell
-python -m pip install -r requirements.txt
+# Save it for your Windows user (open a new terminal afterwards):
+setx SUNSHINE_DATABASE_URL "postgresql://sunshine:choose-a-password@localhost:5432/sunshine"
+
+# Or for the current terminal only:
 $env:SUNSHINE_DATABASE_URL = 'postgresql://sunshine:choose-a-password@localhost:5432/sunshine'
+```
+
+```bash
+# macOS / Linux (add to ~/.bashrc or ~/.zshrc to keep it)
+export SUNSHINE_DATABASE_URL='postgresql://sunshine:choose-a-password@localhost:5432/sunshine'
+```
+
+### 4. Create the tables
+
+```powershell
 python -m sunshine_scraper.storage migrate
-python Sunshine_List_Scaper.py
+python -m sunshine_scraper.storage check     # confirms the connection works
 ```
 
-The database URL is read from the environment only; never put it in `config.py`
-or commit it. `.env.example` shows the format; it is not loaded automatically.
+### 5. Load the data
 
-This will:
-- Print progress for each dataset as it's processed
-- Store new and changed records in PostgreSQL
-- Write all stored records to `output.txt`
-- Print average salary and headcount per year to the console
-- Save `chart_yearly.png` and `chart_titles.png` in the working directory
-
-The first run loads everything (about 3.3 million disclosures). Later runs only
-download datasets Ontario has changed. Set `full_refresh = True` in `config.py`
-to reload everything, e.g. after changing validation rules.
-
-
-## Choosing output paths
-
-Edit the three output settings in `config.py` to keep each run's files in a
-separate folder. Create that folder before running the scraper:
-
-```python
-output_path = 'results/output.txt'
-yearly_chart_path = 'results/chart_yearly.png'
-titles_chart_path = 'results/chart_titles.png'
+```powershell
+python sunshine_list_scraper.py
 ```
 
-Relative paths start from the directory where you run Python. Custom output
-folders such as `results/` are not covered by the default output ignore rules;
-add your folder to your local `.git/info/exclude` if you want to keep it out of Git.
+The first run downloads and stores everything: about 3.3 million records,
+which takes a while. When it finishes you have:
 
-## Reading the exported records
+- the data in PostgreSQL,
+- `output.txt` with every record,
+- `chart_yearly.png` and `chart_titles.png`,
+- a per-year summary in the console.
 
-`output.txt` is a UTF-8, tab-separated file with a header row. In a spreadsheet
-import dialog, choose UTF-8 encoding and a tab delimiter. Use a TSV-aware reader
-to preserve quoted tabs or newlines inside fields:
+It exits with code `0` on success and `1` if any dataset failed (everything
+that did load is kept, and the next run retries the rest).
+
+### 6. Start the website
+
+```powershell
+uvicorn sunshine_scraper.api.app:app
+```
+
+Open **<http://127.0.0.1:8000/>**. Press `Ctrl+C` to stop the server. Add
+`--reload` while editing code so the server restarts on every save.
+
+### 7. Publish the public website
+
+```powershell
+python publish_site.py
+```
+
+This reads the database (it never changes it), builds the site into `site/`,
+and pushes it to the `gh-pages` branch of your GitHub repository. GitHub Pages
+shows the update within a minute or two at
+`https://<your-user>.github.io/<repository>/`.
+
+**One-time GitHub setup** (before or after the first publish): in the
+repository on GitHub, open **Settings → Pages**, set **Source** to *Deploy from
+a branch*, choose branch **`gh-pages`** and folder **`/ (root)`**, and save.
+GitHub Pages is free for public repositories.
+
+To preview without publishing:
+
+```powershell
+python publish_site.py --no-push
+python -m http.server --directory site 8001     # then open http://127.0.0.1:8001/
+```
+
+## Updating the public site
+
+Whenever you want the public site to show new data:
+
+```powershell
+python sunshine_list_scraper.py     # 1. fetch Ontario's latest data
+python publish_site.py              # 2. publish it
+```
+
+If the database is empty or the build fails, nothing is pushed and the current
+public site stays as it is. Each publish replaces the `gh-pages` branch with a
+single fresh commit, so the repository doesn't grow with every update; don't
+use that branch for anything else.
+
+---
+
+## Using the website
+
+The public site and the local one have the same three tabs:
+
+| Tab | What it shows |
+| --- | --- |
+| **Top salaries** | The highest salaries for a chosen year (top 10 to 100). |
+| **Years overview** | People listed and average salary for every year, with a chart. |
+| **Common job titles** | The most frequent job titles across all years. |
+
+The header shows when the public site's data was published, or, locally,
+whether the database is reachable.
+
+## API
+
+The live API runs only on your computer, while the local server is running
+(step 6). All endpoints are `GET` and return JSON. Try them interactively at
+<http://127.0.0.1:8000/docs>.
+
+| Endpoint | Returns |
+| --- | --- |
+| `/api/health` | `{"status": "ok"}` when the database answers |
+| `/api/years` | Headcount and average salary for each year |
+| `/api/titles/top?limit=10` | Most common job titles (`limit` 1–100) |
+| `/api/salaries/top?year=2024&limit=10` | Highest salaries in a year (`limit` 1–100) |
+
+Money is sent as exact integer cents plus a display string, e.g.
+`"salary_cents": 12345678, "salary": "123456.78"`; floats are never used.
+
+| Status | Meaning |
+| --- | --- |
+| `422` | Invalid parameter; the body says which and why |
+| `429` | Rate limit reached; wait for the number of seconds in `Retry-After` |
+| `503` | Database unreachable or busy; try again later |
+
+### Built-in protection
+
+- **Read-only:** only `GET` routes exist, and every database transaction is
+  `READ ONLY`.
+- **Rate limit:** 60 API requests per minute per client address (bursts allowed).
+- **Query limits:** at most 4 queries run at once (others wait briefly), and
+  any query is cancelled after 5 seconds.
+- **Browser security headers:** a strict Content-Security-Policy, `nosniff`,
+  and anti-framing headers. The page renders all data as text, never as HTML.
+- **No secrets in errors:** database failures return a generic message;
+  details go only to the server log.
+
+---
+
+## Configuration
+
+Edit `config.py` (the database URL is the only setting that lives elsewhere).
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `output_path`, `yearly_chart_path`, `titles_chart_path` | project folder | Where exports go. The folder must already exist. |
+| `full_refresh` | `False` | `True` reloads every dataset, e.g. after changing validation rules. |
+| `log_level` | `INFO` | `DEBUG` for detailed scraper diagnostics. |
+| `request_timeout`, `max_retries`, `retry_backoff` | 30 s, 2, 1 s | Download behaviour. |
+| `api_rate_limit_requests`, `api_rate_limit_window` | 60, 60 s | API rate limit per client. |
+| `api_statement_timeout_ms` | 5000 | Maximum time for one API query. |
+| `api_max_concurrent_queries`, `api_query_wait_seconds` | 4, 10 s | Concurrent query cap and how long requests queue. |
+| `site_dir`, `pages_branch` | `site`, `gh-pages` | Where the static site is built, and the branch it is published to. |
+
+## Keeping the data up to date
+
+Ontario publishes a new year each spring and occasionally corrects earlier
+files. Running the scraper on a schedule keeps your local database current
+(the public site still changes only when you run `publish_site.py`); runs
+where nothing changed finish quickly, and only one sync can run at a time, so
+overlapping runs are harmless.
+
+- **Windows:** Task Scheduler → *Create Basic Task* → daily → program
+  `C:\path\to\Sunshine-List-Scraper\.venv\Scripts\python.exe`, arguments
+  `sunshine_list_scraper.py`, *Start in* the project folder. Set
+  `SUNSHINE_DATABASE_URL` with `setx` so the task can see it.
+- **macOS / Linux (cron):**
+  ```cron
+  0 6 * * * cd /path/to/Sunshine-List-Scraper && SUNSHINE_DATABASE_URL=... .venv/bin/python sunshine_list_scraper.py
+  ```
+
+## Output file format
+
+`output.txt` is UTF-8, tab-separated, with a header row, sorted by salary
+(highest first). Columns: `Name`, `Salary` (dollars, two decimals), `Job Title`,
+`Employer`, `Year`, `UUID` (the dataset where the record was first seen).
 
 ```python
 import csv
@@ -89,155 +277,95 @@ with open('output.txt', encoding='utf-8', newline='') as source:
         print(record['Name'], record['Salary'])
 ```
 
-The columns are `Name`, `Salary`, `Job Title`, `Employer`, `Year`, and `UUID`.
-`Salary` is expressed in dollars with exactly two decimals (e.g. `100000.00`).
-`UUID` identifies the dataset where the disclosure was first seen; the database
-keeps every dataset it appeared in.
+In a spreadsheet, import it as UTF-8 with a tab delimiter.
 
-## Project structure
-
-The entry point is `Sunshine_List_Scaper.py`; edit URLs and output paths in `config.py`. Collection, processing, export, reporting, and coordination live in the `sunshine_scraper/` package. Start with [the application learning guide](learning/README.md) for the complete execution flow, a record-by-record walkthrough, Python explanations, architectural decisions, and the next database step.
-
-## v0.3 — Error handling and logging
-
-Requests have configurable timeouts and bounded retries. Invalid API responses and rows are handled explicitly; duplicate records are counted. Progress, warnings, and failures use Python logging. Set `log_level` in `config.py` to `DEBUG` for detailed diagnostics.
-
-A run with failed datasets keeps every dataset that loaded, exports from the database, and exits with status 1 to identify incomplete coverage. A failed dataset is rolled back on its own. If the database is empty, existing outputs are preserved. TSV export uses a temporary file and replacement to protect the previous output on write failures. A missing `SUNSHINE_DATABASE_URL`, an unreachable server, or an out-of-date schema stops the run before any download.
-
-Read [Python and error handling](learning/03-python-and-errors.md) for try/except, HTTP status codes, retries, logging levels, validation policies, and exit codes.
-
-Run offline checks:
-
-```bash
-python -m unittest discover -s tests -v
-```
-
-## Data coverage fixes
-
-Ontario moved newer years (currently 2021 onward) to disclosure pages whose links
-do not contain a CKAN resource UUID. Discovery now resolves those pages through
-Ontario's download list and reads the corresponding English main and addendum
-CSVs. The output's `UUID` column uses the download's UUID directory for these files.
-
-The row reader also recognizes the historical column labels that previously
-caused the 2001, 2014, and 2020 main datasets, and several addenda, to be rejected.
-Alternative title labels are preserved instead of appearing as blank job titles.
-The existing row validity and duplicate rules still apply. These changes do not
-apply addendum change/deletion actions; correction handling remains a separate issue.
-
-## Learn the code
-
-The [learning folder](learning/README.md) explains the app for users and contributors:
-
-- [Full application flow and module responsibilities](learning/01-app-flow.md)
-- [Follow one resource link and disclosure](learning/02-follow-one-record.md)
-- [Python constructs, errors, logging, and tests](learning/03-python-and-errors.md)
-- [PostgreSQL architecture and decisions](learning/04-postgresql-architecture.md)
-- [The web API: how it works and what was built](learning/07-api.md)
-- [The web page and API protection](learning/08-frontend-and-safety.md)
-
-Chapters 1–3 describe the earlier in-memory pipeline; chapter 4 describes how
-the database replaced it.
-
-`sunshine_scraper/database.py` is a separate SQLite query practice module. The
-scraper does not use it.
-
-## PostgreSQL storage
-
-PostgreSQL is the source of truth. A run syncs Ontario's datasets into the
-database, then generates `output.txt`, the summary, and the charts from it.
+## Database
 
 | Table | Holds |
 | --- | --- |
-| `salary_records` | One row per distinct disclosure, salary in exact cents |
-| `source_resources` | Each discovered dataset and what its last load recorded (ETag, timestamps, content hash) |
+| `salary_records` | One row per distinct disclosure; salary in exact cents |
+| `source_resources` | Each dataset discovered, and its change-detection state |
 | `disclosure_sources` | Which datasets each disclosure appeared in |
-| `sync_runs` | One row per run: status and counts |
-| `sync_run_resources` | What happened to each dataset in each run, including error messages |
-| `schema_migrations` | Which migration files this database has received |
+| `sync_runs`, `sync_run_resources` | What each scraper run did, per dataset, including errors |
+| `schema_migrations` | Which migration files have been applied |
 
-Database commands (all use `SUNSHINE_DATABASE_URL`):
+Records are never deleted. If Ontario changes a salary, the new value is
+stored as a new record.
+
+Useful commands (all use `SUNSHINE_DATABASE_URL`):
 
 ```powershell
-python -m sunshine_scraper.storage migrate            # apply new migration files
-python -m sunshine_scraper.storage migrate --status   # list applied/pending files
-python -m sunshine_scraper.storage check              # read-only connectivity check
+python -m sunshine_scraper.storage check                # connectivity check
 python -m sunshine_scraper.storage top --year 2024 --limit 10
+python -m sunshine_scraper.storage migrate --status     # applied / pending migrations
+python -m sunshine_scraper.storage migrate              # apply pending migrations
 ```
 
-The scraper never changes the schema itself; it stops and asks you to run
-`migrate` when files are pending. A database where `001` was applied by hand
-with `psql` can be adopted with `migrate --baseline 001`. See
-`migrations/README.md` for how to add a migration.
-
-### Checking what a run did
+Check recent runs in `psql`:
 
 ```sql
-SELECT id, started_at, finished_at, status, resources_loaded,
-       resources_unchanged, resources_failed
+SELECT id, started_at, status, resources_loaded, resources_unchanged, resources_failed
 FROM sync_runs ORDER BY id DESC LIMIT 5;
-
-SELECT resource_id, status, rows_valid, rows_inserted, rows_refreshed, error_message
-FROM sync_run_resources WHERE run_id = (SELECT max(id) FROM sync_runs);
 ```
 
-A run that crashed stays `running` with no `finished_at`.
-
-### Running it on a schedule
-
-Only one sync runs at a time: a second run that starts while one is in progress
-logs a warning and exits with status 0 without doing anything. A scheduler
-(Windows Task Scheduler, cron) can therefore start
-`python Sunshine_List_Scaper.py` every 15 minutes. Ontario usually changes
-nothing between runs, so most runs only send one small request per dataset.
-
-### Backups
+Back up and restore (keep dumps outside the repository):
 
 ```powershell
 pg_dump -h localhost -U sunshine -d sunshine -Fc -f sunshine.dump
 pg_restore -h localhost -U sunshine -d an_empty_database sunshine.dump
 ```
 
-Keep dumps outside the repository.
+Schema changes go in new numbered files in `migrations/`; see
+[`migrations/README.md`](migrations/README.md).
 
-### Tests
-
-The ordinary offline test command needs no database. Real PostgreSQL tests are
-opt-in through `SUNSHINE_TEST_DATABASE_URL`, which must point at a dedicated test
-database; each test creates and drops its own schema there.
-
-## Web API
-
-A read-only JSON API serves the database to browsers and other programs. It
-uses the same `SUNSHINE_DATABASE_URL` and runs separately from the scraper:
+## Tests
 
 ```powershell
-uvicorn sunshine_scraper.api.app:app --reload
+python -m unittest discover -s tests -v
 ```
 
-Open `http://127.0.0.1:8000/` for the web page: pick a year to see its top
-salaries, browse yearly totals with a chart, or list the most common job
-titles. `http://127.0.0.1:8000/docs` lets you try the raw endpoints.
+The suite runs offline and needs no database. To include the real-PostgreSQL
+tests, set `SUNSHINE_TEST_DATABASE_URL` to a **separate, dedicated** database
+(e.g. `sunshine_test`); those tests create and drop their own schemas in it.
 
-| Endpoint | Returns |
+## Project structure
+
+```
+sunshine_list_scraper.py     CLI entry point: run a sync, then export
+publish_site.py              Build the static site and push it to GitHub Pages
+config.py                    All settings except the database URL
+migrations/                  Numbered SQL schema files
+sunshine_scraper/
+  client.py                  HTTP with retries; dataset discovery and downloads
+  processing.py              Column-name aliases and text normalization
+  sync.py                    Change detection, validation, one transaction per dataset
+  pipeline.py                Sync, then export TSV, summary, and charts
+  export.py, reporting.py    TSV writer; summary and charts
+  errors.py                  ScraperError
+  storage/                   Models, connection, migrations, writer, repository
+  static_site.py             Static site builder and GitHub Pages publisher
+  api/                       FastAPI app, response schemas, rate limiter
+  web/                       Website (plain HTML, CSS, JavaScript; no build step)
+tests/                       unittest suite
+Example_output/              Sample charts
+```
+
+## Troubleshooting
+
+| Problem | Fix |
 | --- | --- |
-| `GET /api/health` | `{"status": "ok"}` when PostgreSQL answers |
-| `GET /api/years` | Headcount and average salary per year |
-| `GET /api/titles/top?limit=10` | Most common job titles |
-| `GET /api/salaries/top?year=2024&limit=10` | Highest salaries for one year |
+| `SUNSHINE_DATABASE_URL is required`, or the website says *Database unavailable* | The variable isn't set in that terminal. Set it (step 3) and restart. |
+| Scraper says migrations are pending | `python -m sunshine_scraper.storage migrate` |
+| `ModuleNotFoundError: config` | Run commands from the project folder. |
+| Website shows *No data yet* | Load the data first (step 5). |
+| Some datasets failed (exit code 1) | Usually a temporary network problem; run the scraper again. Details are in the log and in `sync_run_resources`. |
+| Port 8000 already in use | `uvicorn sunshine_scraper.api.app:app --port 8080` |
+| `publish_site.py`: `git push failed` | Check that you can push to GitHub from this folder (`git push` works) and that `origin` is your repository. |
+| Public site shows a 404 | Turn on GitHub Pages for the `gh-pages` branch (step 7), then wait a minute. |
+| Public site shows old data | Run `python publish_site.py` again; browsers may cache files for up to 10 minutes. |
 
-Money is returned as exact integer cents plus a display string. Invalid input
-returns 422; an unavailable database returns 503 without connection details.
-[Chapter 7](learning/07-api.md) explains the design and the tests.
+## Data source
 
-Protection (limits are set in `config.py`):
-
-- Each client address may make 60 API requests per minute; more get `429`
-  with a `Retry-After` header.
-- At most 4 requests query PostgreSQL at once (others queue briefly), and any
-  query is cancelled after 5 seconds.
-- Responses carry a strict Content-Security-Policy and other browser safety
-  headers.
-
-[Chapter 8](learning/08-frontend-and-safety.md) explains the page and these
-protections, including what to change before exposing it beyond your computer.
+Data © King's Printer for Ontario, published under the
+[Open Government Licence – Ontario](https://www.ontario.ca/page/open-government-licence-ontario).
+This project is not affiliated with the Government of Ontario.
