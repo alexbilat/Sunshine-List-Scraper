@@ -9,6 +9,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Where app.js gets data: "api" = the live server on this PC;
+       publish_site.py changes it to "static" for the public site. -->
+  <meta name="data-source" content="api">
+  <!-- The same policy the local server sends as a header, repeated here
+       because static hosts such as GitHub Pages can't set custom headers. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
   <title>Ontario Sunshine List</title>
   <link rel="stylesheet" href="styles.css">
   <script src="app.js" defer></script>
@@ -106,7 +112,7 @@
 
   <footer>
     <p>Data: <a href="https://www.ontario.ca/page/public-sector-salary-disclosure" rel="noopener noreferrer">Ontario Public Sector Salary Disclosure</a>.
-       Developers: <a href="/docs">API documentation</a>.</p>
+       <span id="api-docs-link">Developers: <a href="/docs">API documentation</a>.</span></p>
   </footer>
 </body>
 </html>

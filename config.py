@@ -45,6 +45,12 @@ api_statement_timeout_ms = 5000
 api_max_concurrent_queries = 4
 api_query_wait_seconds = 10
 
+# Public static website (publish_site.py). The site is built into site_dir
+# (replaced on each build) and pushed to pages_branch, which GitHub Pages
+# serves. That branch is overwritten on every publish; use it for nothing else.
+site_dir = 'site'
+pages_branch = 'gh-pages'
+
 # INFO shows progress plus warnings/errors. DEBUG adds page/row diagnostics.
 # WARNING hides ordinary progress; ERROR shows only failures.
 # CRITICAL is available in Python but is not used by this scraper.

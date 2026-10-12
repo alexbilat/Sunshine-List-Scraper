@@ -1,12 +1,21 @@
-// The Sunshine List page: asks the read-only API for data and shows it.
+// The Sunshine List page: loads salary data and shows it.
 //
-// Safety rule for this whole file: data from the API (names, employers, job
-// titles) is external text. It is only ever placed on the page with
-// textContent or createElement, never innerHTML, so text such as
-// "<img onerror=...>" is shown as text instead of being run as HTML.
+// The same page runs in two places (see the data-source meta tag):
+// - "api": served by the live server on your PC; data comes from /api/...
+// - "static": the public site built by publish_site.py; data comes from
+//   pre-built JSON files next to the page, so no server is needed.
+// Only the small `source` object below differs; everything else is shared.
+//
+// Safety rule for this whole file: the data (names, employers, job titles) is
+// external text. It is only ever placed on the page with textContent or
+// createElement, never innerHTML, so text such as "<img onerror=...>" is shown
+// as text instead of being run as HTML.
 'use strict';
 
-// --- Talking to the API -------------------------------------------------------
+const STATIC_MODE =
+  document.querySelector('meta[name="data-source"]')?.content === 'static';
+
+// --- Fetching JSON ------------------------------------------------------------
 
 // An error a person can understand, plus the HTTP status for callers that care.
 class ApiError extends Error {
@@ -16,9 +25,9 @@ class ApiError extends Error {
   }
 }
 
-// GET one API path and return its parsed JSON.
-// Relative URLs ('/api/...') always go to the server that served this page, so
-// the page needs no configuration and never talks to another site.
+// GET one path and return its parsed JSON.
+// Relative URLs always go to the server that served this page, so the page
+// needs no configuration and never talks to another site.
 // URLSearchParams escapes values, so a parameter can't break the URL.
 async function getJson(path, params = {}) {
   const query = new URLSearchParams(params).toString();
@@ -30,7 +39,9 @@ async function getJson(path, params = {}) {
   } catch {
     // fetch only rejects when no response arrived at all (server stopped,
     // network down). HTTP errors such as 503 still resolve normally.
-    throw new ApiError('Could not reach the server. Is it running?', 0);
+    throw new ApiError(STATIC_MODE
+      ? 'Could not load the data. Check your internet connection and try again.'
+      : 'Could not reach the server. Is it running?', 0);
   }
   if (response.ok) {
     return response.json();
@@ -64,6 +75,40 @@ async function describeError(response) {
   }
   return `Something went wrong (HTTP ${response.status}).`;
 }
+
+// --- Where the data comes from ------------------------------------------------
+// Both sources answer the same three questions with the same JSON shapes
+// (publish_site.py writes the files with the API's own response models).
+
+const liveSource = {
+  years: () => getJson('/api/years'),
+  titles: (limit) => getJson('/api/titles/top', { limit }),
+  topSalaries: (year, limit) => getJson('/api/salaries/top', { year, limit }),
+  async status() {
+    await getJson('/api/health');
+    return 'Database connected';
+  },
+};
+
+// The static files hold the top 100 of each list; the page shows the first
+// `limit` of them, which is exactly what the API would have returned.
+// Paths have no leading slash: GitHub Pages serves the site from a
+// sub-folder (/<repository>/), and relative paths work wherever it lives.
+const staticSource = {
+  years: () => getJson('data/years.json'),
+  titles: async (limit) => (await getJson('data/titles.json')).slice(0, Number(limit)),
+  topSalaries: async (year, limit) =>
+    (await getJson(`data/salaries/${encodeURIComponent(year)}.json`)).slice(0, Number(limit)),
+  async status() {
+    const meta = await getJson('data/meta.json');
+    const date = new Date(meta.generated_at).toLocaleDateString('en-CA', {
+      year: 'numeric', month: 'long', day: 'numeric',
+    });
+    return `Data updated ${date}`;
+  },
+};
+
+const source = STATIC_MODE ? staticSource : liveSource;
 
 // --- Formatting ---------------------------------------------------------------
 
@@ -127,17 +172,21 @@ async function whileBusy(button, work) {
   }
 }
 
-// --- Health indicator ---------------------------------------------------------
+// --- Status indicator ---------------------------------------------------------
+// Live: is the database reachable? Static: when was the data published?
 
 async function checkHealth() {
   const box = $('health');
   try {
-    await getJson('/api/health');
+    $('health-text').textContent = await source.status();
     box.dataset.state = 'ok';
-    $('health-text').textContent = 'Database connected';
   } catch (error) {
     box.dataset.state = 'error';
-    $('health-text').textContent = error.status === 429 ? 'Busy' : 'Database unavailable';
+    if (STATIC_MODE) {
+      $('health-text').textContent = 'Data unavailable';
+    } else {
+      $('health-text').textContent = error.status === 429 ? 'Busy' : 'Database unavailable';
+    }
   }
 }
 
@@ -149,7 +198,7 @@ async function checkHealth() {
 let yearsPromise = null;
 function loadYears() {
   if (!yearsPromise) {
-    yearsPromise = getJson('/api/years').catch((error) => {
+    yearsPromise = source.years().catch((error) => {
       yearsPromise = null; // allow a retry later
       throw error;
     });
@@ -191,7 +240,7 @@ async function showTopSalaries() {
   showMessage(message, `Loading salaries for ${year}${ELLIPSIS}`, 'loading');
   await whileBusy($('salaries-submit'), async () => {
     try {
-      const salaries = await getJson('/api/salaries/top', { year, limit });
+      const salaries = await source.topSalaries(year, limit);
       fillTable(table, salaries.map((salary, index) => tableRow([
         { text: String(index + 1), numeric: true },
         { text: salary.name },
@@ -301,7 +350,7 @@ async function showTitles() {
   showMessage(message, `Loading job titles${ELLIPSIS}`, 'loading');
   await whileBusy($('titles-submit'), async () => {
     try {
-      const titles = await getJson('/api/titles/top', { limit });
+      const titles = await source.titles(limit);
       fillTable(table, titles.map((title, index) => tableRow([
         { text: String(index + 1), numeric: true },
         { text: title.job_title },
@@ -359,6 +408,10 @@ function setUpTabs() {
 // --- Start --------------------------------------------------------------------
 
 function start() {
+  // The API docs exist only on the live server.
+  if (STATIC_MODE) {
+    $('api-docs-link').hidden = true;
+  }
   setUpTabs();
   // preventDefault stops the browser's own form submission (a page reload);
   // the forms only exist so pressing Enter works.
