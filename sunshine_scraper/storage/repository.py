@@ -13,6 +13,9 @@ class SalaryReader(Protocol):
     def yearly_summary(self) -> list[YearSummary]:
         ...
 
+    def top_job_titles(self, limit: int = 10) -> list[TitleCount]:
+        ...
+
 
 class PostgresSalaryRepository:
     """Use a caller-owned connection; never create schema or commit internally.
