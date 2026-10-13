@@ -196,6 +196,18 @@ class PublishTests(unittest.TestCase):
             static_site.git(['push', secret_url], cwd=self.project)
         self.assertNotIn('ghp_s3cret', str(raised.exception))
 
+    def test_returned_remote_url_has_no_credentials(self):
+        # publish_site.py logs the returned URL, so it must already be clean.
+        # git is faked: a real push to this URL would need the network.
+        secret_url = 'https://alex:ghp_s3cret@github.com/alex/repo.git'
+        fake_git = MagicMock(side_effect=lambda arguments, cwd:
+                             secret_url if arguments[:2] == ['remote', 'get-url'] else '')
+        with patch.object(static_site, 'git', fake_git):
+            remote = publish(self.site, 'gh-pages', repository=self.project)
+        self.assertEqual(remote, 'https://***@github.com/alex/repo.git')
+        # The push itself still used the real URL, credentials included.
+        self.assertIn(secret_url, fake_git.call_args_list[-1].args[0])
+
 
 if __name__ == '__main__':
     unittest.main()
