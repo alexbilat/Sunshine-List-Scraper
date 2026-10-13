@@ -194,6 +194,18 @@ class PublishTests(unittest.TestCase):
             publish(self.site, 'gh-pages', repository=self.project)
         self.assertIn('git push failed', str(raised.exception))
 
+    def test_credentials_in_the_remote_url_never_reach_messages(self):
+        # A token in the origin URL would otherwise be logged by publish_site.py
+        # (the returned URL) or shown in a PublishError (git's stderr).
+        secret_url = 'https://alex:ghp_s3cret@github.com/alex/repo.git'
+        self.assertEqual(static_site.hide_credentials(f'fatal: {secret_url} denied'),
+                         'fatal: https://***@github.com/alex/repo.git denied')
+        failed = subprocess.CompletedProcess([], 128, '', f'fatal: unable to access {secret_url}')
+        with patch.object(static_site.subprocess, 'run', return_value=failed), \
+                self.assertRaises(PublishError) as raised:
+            static_site.git(['push', secret_url], cwd=self.project)
+        self.assertNotIn('ghp_s3cret', str(raised.exception))
+
 
 if __name__ == '__main__':
     unittest.main()

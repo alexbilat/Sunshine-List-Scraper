@@ -31,6 +31,11 @@ WEB_DIR = Path(__file__).resolve().parent / 'web'
 # the page cuts it down to the size the visitor picked.
 MAX_ROWS = 100
 
+# The user:password@ (or token@) part of a URL such as
+# https://user:token@github.com/owner/repo.git. Git accepts credentials there,
+# so the origin URL and git's own error text may contain a secret.
+URL_CREDENTIALS = re.compile(r'(?<=://)[^/@\s]+@')
+
 
 class PublishError(RuntimeError):
     """The site could not be built or pushed; the message says why."""
@@ -124,7 +129,8 @@ def publish(site_dir: Path, branch: str, repository: Path = Path('.')) -> str:
     otherwise grow the repository with every publish. That is why it must be
     a branch used for nothing else.
 
-    Returns the URL of the remote it pushed to.
+    Returns the URL of the remote it pushed to, without any credentials, so
+    the caller can log it safely.
     """
     if not (Path(site_dir) / 'index.html').is_file():
         raise PublishError(f'{site_dir} has no index.html; build the site first')
@@ -139,7 +145,12 @@ def publish(site_dir: Path, branch: str, repository: Path = Path('.')) -> str:
         stamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
         git(['commit', '--quiet', '-m', f'Publish site ({stamp})'], cwd=staging)
         git(['push', '--force', '--quiet', remote, f'HEAD:refs/heads/{branch}'], cwd=staging)
-    return remote
+    return hide_credentials(remote)
+
+
+def hide_credentials(text: str) -> str:
+    """Replace any credentials inside URLs in `text` with ***."""
+    return URL_CREDENTIALS.sub('***@', text)
 
 
 def git(arguments: list[str], cwd: Path) -> str:
@@ -150,5 +161,7 @@ def git(arguments: list[str], cwd: Path) -> str:
     except FileNotFoundError as error:
         raise PublishError('git is not installed or not on PATH') from error
     if completed.returncode != 0:
-        raise PublishError(f'git {arguments[0]} failed: {completed.stderr.strip()}')
+        # git may echo the remote URL (credentials included) in its error text.
+        raise PublishError(f'git {arguments[0]} failed: '
+                           f'{hide_credentials(completed.stderr.strip())}')
     return completed.stdout

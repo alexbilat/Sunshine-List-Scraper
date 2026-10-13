@@ -23,6 +23,8 @@ def main(argv=None):
                         help=f'only build into {config.site_dir}/ without publishing')
     arguments = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+    # Same setting as the scraper; INFO above stays as the handler's fallback.
+    logging.getLogger().setLevel(config.log_level)
     site_dir = Path(config.site_dir)
     try:
         years = build_from_database(site_dir)
