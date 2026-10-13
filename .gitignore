@@ -1,12 +1,16 @@
 .venv/
 __pycache__/
 *.py[cod]
-docs
+
 # Database credentials are local configuration, never source code.
 .env
 .env.*
 !.env.example
-CLAUDE.md
+
+# Private notes and assistant instructions; anchored to the project root so a
+# future folder such as sunshine_scraper/docs/ is not ignored by accident.
+/docs/
+/CLAUDE.md
 
 # Default scraper outputs can be regenerated; keep curated examples tracked.
 /output.txt
