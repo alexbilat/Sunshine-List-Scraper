@@ -20,6 +20,8 @@ import shutil
 import subprocess
 import tempfile
 
+from pydantic import BaseModel
+
 from .api.schemas import Salary, TitleStats, YearStats
 from .storage.connection import DatabaseSettings, open_read_only_connection
 from .storage.repository import MAX_LIMIT, PostgresSalaryRepository, SalaryReader
@@ -84,7 +86,10 @@ def write_json(path: Path, value) -> None:
     """Write Pydantic models (or plain data) as compact UTF-8 JSON."""
     path.parent.mkdir(parents=True, exist_ok=True)
     if isinstance(value, list):
-        value = [item.model_dump() if hasattr(item, 'model_dump') else item for item in value]
+        # isinstance, not a model_dump attribute check: only real response
+        # models are converted, so an unexpected object fails loudly in
+        # json.dumps instead of being half-serialized.
+        value = [item.model_dump() if isinstance(item, BaseModel) else item for item in value]
     # ensure_ascii=False keeps accented names readable; separators drop
     # spaces, which matters for the larger files.
     path.write_text(json.dumps(value, ensure_ascii=False, separators=(',', ':')),
