@@ -1,9 +1,10 @@
 <!doctype html>
 <!--
   The Sunshine List web page. It is plain HTML: all data is loaded afterwards
-  by app.js from the read-only API on this same server (/api/...).
-  No inline scripts or styles, so the strict Content-Security-Policy set by
-  the server can forbid them entirely.
+  by app.js, either from the read-only API on this same server (/api/...) or,
+  on the public static site, from pre-built JSON files (see data-source below).
+  No inline scripts or styles, so the strict Content-Security-Policy can
+  forbid them entirely.
 -->
 <html lang="en">
 <head>
