@@ -21,15 +21,15 @@ import subprocess
 import tempfile
 
 from .api.schemas import Salary, TitleStats, YearStats
-from .storage.connection import DatabaseSettings, open_connection
-from .storage.repository import PostgresSalaryRepository, SalaryReader
+from .storage.connection import DatabaseSettings, open_read_only_connection
+from .storage.repository import MAX_LIMIT, PostgresSalaryRepository, SalaryReader
 
 logger = logging.getLogger(__name__)
 
 WEB_DIR = Path(__file__).resolve().parent / 'web'
-# The page offers "Top 10" up to "Top 100", so the largest list is stored and
-# the page cuts it down to the size the visitor picked.
-MAX_ROWS = 100
+# The page offers "Top 10" up to "Top 100", so the largest list the API would
+# allow is stored and the page cuts it down to the size the visitor picked.
+MAX_ROWS = MAX_LIMIT
 
 # The user:password@ (or token@) part of a URL such as
 # https://user:token@github.com/owner/repo.git. Git accepts credentials there,
@@ -103,8 +103,7 @@ def build_from_database(destination: Path, settings: DatabaseSettings | None = N
     workspace = Path(tempfile.mkdtemp(prefix='sunshine-site-'))
     try:
         built = workspace / 'site'
-        with open_connection(settings) as connection:
-            connection.execute('SET TRANSACTION READ ONLY')
+        with open_read_only_connection(settings) as connection:
             years = build_site(PostgresSalaryRepository(connection), built,
                                datetime.now(timezone.utc))
         if destination.exists():

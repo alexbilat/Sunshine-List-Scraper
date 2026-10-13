@@ -23,8 +23,8 @@ from fastapi.staticfiles import StaticFiles
 import config
 
 from ..storage.connection import (DatabaseAccessError, DatabaseConfigurationError,
-                                  DatabaseSettings, open_connection)
-from ..storage.repository import PostgresSalaryRepository, SalaryReader
+                                  DatabaseSettings, open_read_only_connection)
+from ..storage.repository import MAX_LIMIT, PostgresSalaryRepository, SalaryReader
 from .ratelimit import RateLimiter
 from .schemas import Health, Salary, TitleStats, YearStats
 
@@ -124,6 +124,11 @@ async def add_security_headers(request: Request, call_next):
 # *every* request would fail. Queuing keeps the database working at a pace
 # it can sustain. A semaphore is a counter of free slots that threads take
 # and give back; FastAPI runs these plain-def routes in threads.
+#
+# Known tradeoff: a waiting request holds one of AnyIO's worker threads (40 by
+# default, shared with StaticFiles) for up to api_query_wait_seconds. A flood
+# could therefore also slow static files. Acceptable for an API that only runs
+# locally; a public deployment would want an async wait or a smaller timeout.
 query_slots = threading.BoundedSemaphore(config.api_max_concurrent_queries)
 
 
@@ -131,8 +136,9 @@ query_slots = threading.BoundedSemaphore(config.api_max_concurrent_queries)
 def read_only_connection() -> Iterator:
     """Open one connection whose transaction cannot write.
 
-    open_connection commits or rolls back, closes the connection, and turns
-    driver errors into DatabaseAccessError (without the URL or password).
+    open_read_only_connection marks the transaction read-only, closes the
+    connection, and turns driver errors into DatabaseAccessError (without the
+    URL or password).
     Settings are read per request so a missing SUNSHINE_DATABASE_URL becomes a
     503 response instead of stopping the server from starting.
     """
@@ -143,15 +149,12 @@ def read_only_connection() -> Iterator:
     if not query_slots.acquire(timeout=config.api_query_wait_seconds):
         raise DatabaseAccessError('All query slots busy')
     try:
-        with open_connection(settings) as connection:
-            # Defense in depth: even if the database role may write, this
-            # transaction cannot. PostgreSQL rejects any INSERT/UPDATE/DELETE.
-            connection.execute('SET TRANSACTION READ ONLY')
+        with open_read_only_connection(settings) as connection:
             # Cap how long any query in this transaction may run, so a slow query
             # can't hold a worker thread and a connection indefinitely. set_config
             # (unlike SET) accepts a parameter, and `true` makes it last only for
             # this transaction. A cancelled query raises a driver error, which
-            # open_connection turns into DatabaseAccessError (503).
+            # open_read_only_connection turns into DatabaseAccessError (503).
             connection.execute("SELECT set_config('statement_timeout', %s, true)",
                                (f'{config.api_statement_timeout_ms}ms',))
             yield connection
@@ -182,7 +185,8 @@ OpenReader = Annotated[Callable[[], ContextManager[SalaryReader]], Depends(get_o
 # reaches SQL and the caller gets a 422 naming the parameter that was wrong.
 # The bounds mirror the checks in PostgresSalaryRepository and appear in /docs.
 Year = Annotated[int, Query(ge=0, le=9999, description='Disclosure year, e.g. 2024')]
-Limit = Annotated[int, Query(ge=1, le=100, description='Number of rows (1-100)')]
+Limit = Annotated[int, Query(ge=1, le=MAX_LIMIT,
+                             description=f'Number of rows (1-{MAX_LIMIT})')]
 
 
 # --- Errors -----------------------------------------------------------------

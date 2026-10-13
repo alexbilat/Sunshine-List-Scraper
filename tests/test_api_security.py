@@ -7,6 +7,7 @@ mounting it at '/' does not hide the API.
 """
 from contextlib import nullcontext
 import os
+import re
 import threading
 import unittest
 from unittest.mock import patch
@@ -16,8 +17,11 @@ import psycopg
 
 import config
 import sunshine_scraper.api.app as app_module  # the module, to patch query_slots
-from sunshine_scraper.api.app import app, get_open_reader
+from sunshine_scraper.api.app import CONTENT_SECURITY_POLICY, app, get_open_reader
 from sunshine_scraper.api.ratelimit import RateLimiter
+from sunshine_scraper.storage.repository import MAX_LIMIT
+
+from fakes import FakeSalaryReader
 
 
 class FakeClock:
@@ -96,21 +100,14 @@ class RateLimiterTests(unittest.TestCase):
                 RateLimiter(**kwargs)
 
 
-class FakeSalaryReader:
-    def __init__(self):
-        self.calls = 0
-
-    def yearly_summary(self):
-        self.calls += 1
-        return []
-
-
 class RateLimitMiddlewareTests(unittest.TestCase):
     def setUp(self):
-        self.reader = FakeSalaryReader()
+        self.reader = FakeSalaryReader(years=[])
         app.dependency_overrides[get_open_reader] = lambda: (lambda: nullcontext(self.reader))
         self.addCleanup(app.dependency_overrides.clear)
-        # Swap in a tiny limit (2 requests, effectively no refill) for these tests.
+        # Swap in a tiny limit (2 requests, effectively no refill) for these
+        # tests. A fresh limiter is as clean as reset() and also has the
+        # small capacity these tests need.
         original = app.state.rate_limiter
         app.state.rate_limiter = RateLimiter(capacity=2, refill_per_second=0.01)
         self.addCleanup(setattr, app.state, 'rate_limiter', original)
@@ -126,7 +123,7 @@ class RateLimitMiddlewareTests(unittest.TestCase):
         # 1 token at 0.01 tokens/second = 100 seconds, sent as whole seconds.
         self.assertEqual(response.headers['Retry-After'], '100')
         # The refused request never reached the route or the database.
-        self.assertEqual(self.reader.calls, 2)
+        self.assertEqual(len(self.reader.calls), 2)
         # The log names the path but not the query string.
         self.assertNotIn('typed-by-client', ''.join(logs.output))
 
@@ -206,6 +203,23 @@ class FrontendTests(unittest.TestCase):
         self.assertNotIn('style=', html)
         self.assertNotIn('<style', html)
 
+    def test_page_policy_matches_the_server_policy(self):
+        # index.html repeats the policy in a <meta> tag for the static site
+        # (GitHub Pages can't send headers). Browsers ignore frame-ancestors
+        # in a meta tag, so that directive is the only allowed difference.
+        html = self.client.get('/').text
+        meta = re.search(r'http-equiv="Content-Security-Policy" content="([^"]*)"', html)
+        self.assertIsNotNone(meta)
+        header = {directive.strip() for directive in CONTENT_SECURITY_POLICY.split(';')}
+        header.discard("frame-ancestors 'none'")
+        self.assertEqual({directive.strip() for directive in meta.group(1).split(';')}, header)
+
+    def test_page_never_asks_for_more_rows_than_the_api_allows(self):
+        html = self.client.get('/').text
+        options = [int(value) for value in re.findall(r'<option value="(\d+)"', html)]
+        self.assertTrue(options)
+        self.assertLessEqual(max(options), MAX_LIMIT)
+
     def test_script_and_stylesheet_are_served(self):
         for path, content_type in [('/app.js', 'javascript'), ('/styles.css', 'text/css')]:
             with self.subTest(path=path):
@@ -223,7 +237,7 @@ class FrontendTests(unittest.TestCase):
         self.assertTrue(script.isascii())
 
     def test_mount_does_not_hide_the_api_or_docs(self):
-        app.dependency_overrides[get_open_reader] = lambda: (lambda: nullcontext(FakeSalaryReader()))
+        app.dependency_overrides[get_open_reader] = lambda: (lambda: nullcontext(FakeSalaryReader(years=[])))
         self.addCleanup(app.dependency_overrides.clear)
         self.assertEqual(self.client.get('/api/years').json(), [])
         self.assertEqual(self.client.get('/openapi.json').status_code, 200)

@@ -68,7 +68,9 @@ anyone can use.
    show (yearly totals, top 100 job titles, top 100 salaries per year) as JSON
    files, about 550 KB in total, and pushes them with the page to GitHub
    Pages. The public site works exactly like the local one but needs no server
-   or database, so it is free to host and stays up permanently.
+   or database, so it is free to host and stays up permanently. A small
+   `meta.json` records when it was built, and the page header shows
+   "Data updated <date>" instead of the live database status.
 
 ## Engineering highlights
 
@@ -85,11 +87,15 @@ anyone can use.
   refuses to run against an out-of-date schema instead of guessing.
 - **Hardened API.** GET-only routes, `READ ONLY` transactions, per-client
   token-bucket rate limiting (`429` + `Retry-After`), a cap on concurrent
-  queries, a per-query timeout, and error messages that never leak connection
-  details.
+  queries (requests wait up to `api_query_wait_seconds` for a free slot, then
+  get `503`), a per-query timeout, and error messages that never leak
+  connection details.
 - **Safe frontend.** No build step and no third-party scripts; a strict
   Content-Security-Policy, and all data rendered with `textContent`, never as
-  HTML.
+  HTML. GitHub Pages can't send custom headers, so the public site carries the
+  policy in a `<meta>` tag and goes without `frame-ancestors`,
+  `X-Frame-Options` and `nosniff`; it shows public data with no logins or
+  forms, so the missing clickjacking protection costs little.
 - **Tested offline.** About 140 unit tests run without a network or database;
   real-PostgreSQL integration tests are opt-in.
 

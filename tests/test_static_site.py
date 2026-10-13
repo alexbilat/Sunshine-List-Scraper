@@ -5,7 +5,6 @@ in a temporary folder, standing in for GitHub, so nothing leaves the machine.
 """
 from contextlib import nullcontext
 from datetime import datetime, timezone
-from decimal import Decimal
 import json
 import os
 from pathlib import Path
@@ -19,28 +18,12 @@ from fastapi.testclient import TestClient
 from sunshine_scraper.api.app import app, get_open_reader
 from sunshine_scraper import static_site
 from sunshine_scraper.static_site import PublishError, build_from_database, build_site, publish
-from sunshine_scraper.storage.models import SalaryResult, TitleCount, YearSummary
+from sunshine_scraper.storage import connection as connection_module
+from sunshine_scraper.storage.models import SalaryResult
+
+from fakes import FakeSalaryReader
 
 GENERATED_AT = datetime(2026, 10, 12, 15, 30, tzinfo=timezone.utc)
-
-
-class FakeSalaryReader:
-    def __init__(self, years=None):
-        self.years = years if years is not None else [
-            YearSummary(2023, 0, None),                       # no people: no salaries file
-            YearSummary(2024, 2, Decimal('11172839.5000000000'))]
-        self.calls = []
-
-    def yearly_summary(self):
-        return self.years
-
-    def top_job_titles(self, limit=10):
-        self.calls.append(('top_job_titles', limit))
-        return [TitleCount('Professor', 3), TitleCount('Nurse', 2)]
-
-    def get_top_salaries(self, year, limit=10):
-        self.calls.append(('get_top_salaries', year, limit))
-        return [SalaryResult('Zoë', 'Example', 'Hôpital <b>Example</b>', 12345678)]
 
 
 def read_json(path):
@@ -52,6 +35,9 @@ class BuildSiteTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.site = Path(temporary.name) / 'site'
+        # test_json_matches_the_live_api_exactly calls the API, and the rate
+        # limiter is shared app state; start each test with a full budget.
+        app.state.rate_limiter.reset()
 
     def test_writes_page_in_static_mode_and_all_data_files(self):
         reader = FakeSalaryReader()
@@ -65,7 +51,8 @@ class BuildSiteTests(unittest.TestCase):
         # A year with nobody listed gets no file (the page never offers it).
         self.assertFalse((self.site / 'data/salaries/2023.json').exists())
         # The largest list the page can ask for is stored.
-        self.assertEqual(reader.calls, [('top_job_titles', 100), ('get_top_salaries', 2024, 100)])
+        self.assertEqual(reader.calls, [('yearly_summary',), ('top_job_titles', 100),
+                                        ('get_top_salaries', 2024, 100)])
         self.assertEqual(read_json(self.site / 'data/meta.json'),
                          {'generated_at': '2026-10-12T15:30:00+00:00'})
 
@@ -75,7 +62,6 @@ class BuildSiteTests(unittest.TestCase):
         build_site(reader, self.site, GENERATED_AT)
         app.dependency_overrides[get_open_reader] = lambda: (lambda: nullcontext(reader))
         self.addCleanup(app.dependency_overrides.clear)
-        app.state.rate_limiter.reset()
         client = TestClient(app)
         self.assertEqual(read_json(self.site / 'data/years.json'), client.get('/api/years').json())
         self.assertEqual(read_json(self.site / 'data/titles.json'),
@@ -84,7 +70,9 @@ class BuildSiteTests(unittest.TestCase):
                          client.get('/api/salaries/top', params={'year': 2024, 'limit': 100}).json())
 
     def test_text_is_stored_as_data_not_markup(self):
-        build_site(FakeSalaryReader(), self.site, GENERATED_AT)
+        reader = FakeSalaryReader(salaries=[
+            SalaryResult('Zoë', 'Example', 'Hôpital <b>Example</b>', 12345678)])
+        build_site(reader, self.site, GENERATED_AT)
         salary = read_json(self.site / 'data/salaries/2024.json')[0]
         # Unchanged text: escaping is the page's job (textContent), and
         # accented names stay readable.
@@ -105,7 +93,9 @@ class BuildFromDatabaseTests(unittest.TestCase):
         self.root = Path(temporary.name)
         self.connection = MagicMock()
         for patcher in [
-                patch.object(static_site, 'open_connection',
+                # Patched one level down, so the real open_read_only_connection
+                # still runs and its SET TRANSACTION READ ONLY can be checked.
+                patch.object(connection_module, 'open_connection',
                              return_value=nullcontext(self.connection)),
                 patch.object(static_site, 'PostgresSalaryRepository',
                              side_effect=lambda connection: self.reader)]:

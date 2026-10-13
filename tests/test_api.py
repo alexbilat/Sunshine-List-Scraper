@@ -5,7 +5,6 @@ PostgreSQL is needed. Data routes use a fake SalaryReader. Connection tests
 patch psycopg.connect so the real dependency and error handling still run.
 """
 from contextlib import nullcontext
-from decimal import Decimal
 import os
 import unittest
 from unittest.mock import MagicMock, call, patch
@@ -16,30 +15,10 @@ import psycopg
 import config
 from sunshine_scraper.api.app import app, get_open_reader
 from sunshine_scraper.storage.connection import DatabaseAccessError
-from sunshine_scraper.storage.models import SalaryResult, TitleCount, YearSummary
+
+from fakes import FakeSalaryReader
 
 SECRET_URL = 'postgresql://sunshine:hunter2@db.internal/sunshine'
-
-
-class FakeSalaryReader:
-    """Implements SalaryReader in memory and records what routes asked for."""
-
-    def __init__(self):
-        self.calls = []
-
-    def get_top_salaries(self, year, limit=10):
-        self.calls.append(('get_top_salaries', year, limit))
-        return [SalaryResult('Alex', 'Example', 'Example Hospital', 12345678),
-                SalaryResult('Sam', 'Sample', 'Example College', 10000000)]
-
-    def yearly_summary(self):
-        self.calls.append(('yearly_summary',))
-        return [YearSummary(2023, 0, None),
-                YearSummary(2024, 2, Decimal('11172839.5000000000'))]
-
-    def top_job_titles(self, limit=10):
-        self.calls.append(('top_job_titles', limit))
-        return [TitleCount('Professor', 3), TitleCount('Nurse', 2)]
 
 
 class DataRouteTests(unittest.TestCase):

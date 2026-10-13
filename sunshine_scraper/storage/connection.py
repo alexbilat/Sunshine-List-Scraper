@@ -59,3 +59,16 @@ def open_connection(settings, *, autocommit=False):
         raise DatabaseAccessError(
             "PostgreSQL operation failed; check server access, permissions, and schema"
         ) from error
+
+
+@contextmanager
+def open_read_only_connection(settings):
+    """Like open_connection, but the whole transaction is unable to write.
+
+    For readers (the API and the static site builder). Defense in depth: even
+    if the database role may write, PostgreSQL rejects any INSERT, UPDATE or
+    DELETE in this transaction, so a bug in a reader can never change data.
+    """
+    with open_connection(settings) as connection:
+        connection.execute('SET TRANSACTION READ ONLY')
+        yield connection

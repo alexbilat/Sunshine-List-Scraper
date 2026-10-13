@@ -3,6 +3,11 @@ from typing import Iterator, Protocol
 
 from .models import SalaryResult, TitleCount, YearSummary, format_cents
 
+# The most rows one ranked list may return. The API validates against it, the
+# static site stores exactly this many, and the page's "Top N" options must
+# not exceed it, so they all read it from here instead of repeating 100.
+MAX_LIMIT = 100
+
 
 class SalaryReader(Protocol):
     """Describe the operations an API needs without coupling it to Psycopg."""
@@ -30,8 +35,8 @@ class PostgresSalaryRepository:
     def get_top_salaries(self, year: int, limit: int = 10) -> list[SalaryResult]:
         if type(year) is not int or not 0 <= year <= 9999:
             raise ValueError("year must be an integer between 0 and 9999")
-        if type(limit) is not int or not 1 <= limit <= 100:
-            raise ValueError("limit must be an integer between 1 and 100")
+        if type(limit) is not int or not 1 <= limit <= MAX_LIMIT:
+            raise ValueError(f"limit must be an integer between 1 and {MAX_LIMIT}")
         # Bind input values separately; the SQL structure is fixed.
         rows = self.connection.execute(
             """
@@ -60,8 +65,8 @@ class PostgresSalaryRepository:
         return [YearSummary(*row) for row in rows]
 
     def top_job_titles(self, limit: int = 10) -> list[TitleCount]:
-        if type(limit) is not int or not 1 <= limit <= 100:
-            raise ValueError("limit must be an integer between 1 and 100")
+        if type(limit) is not int or not 1 <= limit <= MAX_LIMIT:
+            raise ValueError(f"limit must be an integer between 1 and {MAX_LIMIT}")
         rows = self.connection.execute(
             """
             SELECT job_title, count(*) AS appearances
