@@ -12,9 +12,6 @@
 // as text instead of being run as HTML.
 'use strict';
 
-const STATIC_MODE =
-  document.querySelector('meta[name="data-source"]')?.content === 'static';
-
 // --- Fetching JSON ------------------------------------------------------------
 
 // An error a person can understand, plus the HTTP status for callers that care.
@@ -29,7 +26,9 @@ class ApiError extends Error {
 // Relative URLs always go to the server that served this page, so the page
 // needs no configuration and never talks to another site.
 // URLSearchParams escapes values, so a parameter can't break the URL.
-async function getJson(path, params = {}) {
+// unreachable is the message shown when no response arrives at all; it
+// depends on where the data lives, so each source passes its own.
+async function getJson(path, unreachable, params = {}) {
   const query = new URLSearchParams(params).toString();
   let response;
   try {
@@ -39,9 +38,7 @@ async function getJson(path, params = {}) {
   } catch {
     // fetch only rejects when no response arrived at all (server stopped,
     // network down). HTTP errors such as 503 still resolve normally.
-    throw new ApiError(STATIC_MODE
-      ? 'Could not load the data. Check your internet connection and try again.'
-      : 'Could not reach the server. Is it running?', 0);
+    throw new ApiError(unreachable, 0);
   }
   if (response.ok) {
     return response.json();
@@ -79,36 +76,52 @@ async function describeError(response) {
 // --- Where the data comes from ------------------------------------------------
 // Both sources answer the same three questions with the same JSON shapes
 // (publish_site.py writes the files with the API's own response models).
+// Everything else that differs between the two modes also lives here, so the
+// rest of the file never needs to ask which mode it is in.
 
+const SERVER_UNREACHABLE = 'Could not reach the server. Is it running?';
 const liveSource = {
-  years: () => getJson('/api/years'),
-  titles: (limit) => getJson('/api/titles/top', { limit }),
-  topSalaries: (year, limit) => getJson('/api/salaries/top', { year, limit }),
+  years: () => getJson('/api/years', SERVER_UNREACHABLE),
+  titles: (limit) => getJson('/api/titles/top', SERVER_UNREACHABLE, { limit }),
+  topSalaries: (year, limit) =>
+    getJson('/api/salaries/top', SERVER_UNREACHABLE, { year, limit }),
   async status() {
-    await getJson('/api/health');
+    await getJson('/api/health', SERVER_UNREACHABLE);
     return 'Database connected';
   },
+  // A 429 means the server is fine but this visitor asked too often.
+  statusFailed: (error) => (error.status === 429 ? 'Busy' : 'Database unavailable'),
+  // FastAPI's interactive /docs page exists only on the live server.
+  hasApiDocs: true,
 };
 
 // The static files hold the top 100 of each list; the page shows the first
 // `limit` of them, which is exactly what the API would have returned.
 // Paths have no leading slash: GitHub Pages serves the site from a
 // sub-folder (/<repository>/), and relative paths work wherever it lives.
+const FILES_UNREACHABLE =
+  'Could not load the data. Check your internet connection and try again.';
 const staticSource = {
-  years: () => getJson('data/years.json'),
-  titles: async (limit) => (await getJson('data/titles.json')).slice(0, Number(limit)),
+  years: () => getJson('data/years.json', FILES_UNREACHABLE),
+  titles: async (limit) =>
+    (await getJson('data/titles.json', FILES_UNREACHABLE)).slice(0, Number(limit)),
   topSalaries: async (year, limit) =>
-    (await getJson(`data/salaries/${encodeURIComponent(year)}.json`)).slice(0, Number(limit)),
+    (await getJson(`data/salaries/${encodeURIComponent(year)}.json`, FILES_UNREACHABLE))
+      .slice(0, Number(limit)),
   async status() {
-    const meta = await getJson('data/meta.json');
+    const meta = await getJson('data/meta.json', FILES_UNREACHABLE);
     const date = new Date(meta.generated_at).toLocaleDateString('en-CA', {
       year: 'numeric', month: 'long', day: 'numeric',
     });
     return `Data updated ${date}`;
   },
+  statusFailed: () => 'Data unavailable',
+  hasApiDocs: false,
 };
 
-const source = STATIC_MODE ? staticSource : liveSource;
+const source =
+  document.querySelector('meta[name="data-source"]')?.content === 'static'
+    ? staticSource : liveSource;
 
 // --- Formatting ---------------------------------------------------------------
 
@@ -182,11 +195,7 @@ async function checkHealth() {
     box.dataset.state = 'ok';
   } catch (error) {
     box.dataset.state = 'error';
-    if (STATIC_MODE) {
-      $('health-text').textContent = 'Data unavailable';
-    } else {
-      $('health-text').textContent = error.status === 429 ? 'Busy' : 'Database unavailable';
-    }
+    $('health-text').textContent = source.statusFailed(error);
   }
 }
 
@@ -408,10 +417,7 @@ function setUpTabs() {
 // --- Start --------------------------------------------------------------------
 
 function start() {
-  // The API docs exist only on the live server.
-  if (STATIC_MODE) {
-    $('api-docs-link').hidden = true;
-  }
+  $('api-docs-link').hidden = !source.hasApiDocs;
   setUpTabs();
   // preventDefault stops the browser's own form submission (a page reload);
   // the forms only exist so pressing Enter works.
