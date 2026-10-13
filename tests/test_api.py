@@ -83,7 +83,7 @@ class DataRouteTests(unittest.TestCase):
 
 
 class ConnectionTests(unittest.TestCase):
-    """Run the real get_connection dependency against a patched driver."""
+    """Run the real read_only_connection code against a patched driver."""
 
     def setUp(self):
         app.state.rate_limiter.reset()
