@@ -1,9 +1,13 @@
 """Report database aggregates; this module does not download, validate, or query."""
 import logging
+from operator import attrgetter
+
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
 logger = logging.getLogger(__name__)
+# sorted() key that orders YearSummary rows by year.
+summary_year = attrgetter('year')
 
 
 def print_yearly_summary(yearly_summary):
@@ -14,11 +18,6 @@ def print_yearly_summary(yearly_summary):
     for summary in sorted(yearly_summary, key=summary_year, reverse=True):
         logger.info('%s: Average: %.2f Number of people: %s', summary.year,
                     summary.average_dollars, summary.people)
-
-
-def summary_year(summary):
-    """Give sorted the year each YearSummary should be ordered by."""
-    return summary.year
 
 
 def create_charts(yearly_summary, top_titles, yearly_chart_path, titles_chart_path):
@@ -54,7 +53,9 @@ def create_charts(yearly_summary, top_titles, yearly_chart_path, titles_chart_pa
             return f'${value:,.0f}'
 
         salary_axis.yaxis.set_major_formatter(mticker.FuncFormatter(format_salary_tick))
-        plt.title('Ontario Sunshine List — Average Salary & Headcount by Year')
+        # Title the figure's own axes rather than pyplot's "current" one, which
+        # after twinx() is the salary axis; the title chart does the same.
+        count_axis.set_title('Ontario Sunshine List — Average Salary & Headcount by Year')
         figure.tight_layout()  # Adjust spacing to keep labels within the image.
         figure.savefig(yearly_chart_path, dpi=150)
     finally:
