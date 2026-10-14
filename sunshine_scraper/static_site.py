@@ -29,6 +29,10 @@ from .storage.repository import MAX_LIMIT, PostgresSalaryRepository, SalaryReade
 logger = logging.getLogger(__name__)
 
 WEB_DIR = Path(__file__).resolve().parent / 'web'
+# The tag in index.html that selects where app.js reads data from, and what
+# the static build swaps it for.
+LIVE_SOURCE_TAG = '<meta name="data-source" content="api">'
+STATIC_SOURCE_TAG = '<meta name="data-source" content="static">'
 # The page offers "Top 10" up to "Top 100", so the largest list the API would
 # allow is stored and the page cuts it down to the size the visitor picked.
 MAX_ROWS = MAX_LIMIT
@@ -59,11 +63,10 @@ def build_site(reader: SalaryReader, destination: Path, generated_at: datetime) 
     shutil.copytree(WEB_DIR, destination)
     index = destination / 'index.html'
     html = index.read_text(encoding='utf-8')
-    html, replaced = re.subn(r'<meta name="data-source" content="api">',
-                             '<meta name="data-source" content="static">', html)
-    if replaced != 1:
+    # A plain text swap: the tag is a fixed string, so no regex is needed.
+    if html.count(LIVE_SOURCE_TAG) != 1:
         raise PublishError('index.html is missing its data-source meta tag')
-    index.write_text(html, encoding='utf-8')
+    index.write_text(html.replace(LIVE_SOURCE_TAG, STATIC_SOURCE_TAG), encoding='utf-8')
     # GitHub Pages runs files through Jekyll unless this marker exists; the
     # site is already final, so skip that step.
     (destination / '.nojekyll').write_text('', encoding='utf-8')
