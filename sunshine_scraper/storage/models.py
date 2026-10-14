@@ -90,8 +90,8 @@ class Disclosure:
     def from_source_row(cls, row):
         """Adapt a raw CKAN/CSV row using the scraper's shared alias rules.
 
-        The existing export uses floats and combines names. Read raw rows here
-        so neither exact cents nor first/last-name boundaries are lost.
+        Reading the raw row keeps exact cents (never a float) and the
+        boundary between first and last name, which a combined name would lose.
         """
         if not isinstance(row, dict):
             raise ValueError("row is not an object")
@@ -112,7 +112,7 @@ class Disclosure:
     def content_key(self):
         """SHA-256 fingerprint of disclosure contents, excluding its source.
 
-        Lowercasing follows the existing within-run duplicate policy. A version
+        Lowercasing treats rows that differ only in capitals as one. A version
         tag and JSON array make the encoding explicit and unambiguous. This is
         a practical content fingerprint, not a guaranteed unique person ID.
         """
@@ -125,7 +125,7 @@ class Disclosure:
 
 @dataclass(frozen=True)
 class SalaryResult:
-    """A small read result that a future API can turn into a response."""
+    """One row of a top-salaries query; the API turns it into a response."""
 
     first_name: str
     last_name: str

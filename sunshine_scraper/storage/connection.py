@@ -39,7 +39,8 @@ def open_connection(settings, *, autocommit=False):
     statement commits by itself, and the caller groups writes explicitly with
     connection.transaction(). The sync uses that mode so that one failed
     dataset rolls back alone while earlier datasets stay committed.
-    A future web service can replace this boundary with a connection pool.
+    The API opens one per request; a connection pool could replace this
+    boundary if it ever needs to serve more traffic.
     """
     try:
         import psycopg

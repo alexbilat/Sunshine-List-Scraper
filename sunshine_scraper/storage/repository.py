@@ -1,4 +1,4 @@
-"""SQL reads behind an interface that a future backend can depend on."""
+"""SQL reads behind the SalaryReader interface that the API and static site use."""
 from typing import Iterator, Protocol
 
 from .models import SalaryResult, TitleCount, YearSummary, format_cents
@@ -84,8 +84,8 @@ class PostgresSalaryRepository:
 
         A named (server-side) cursor keeps the result on the server and sends
         batch_size rows at a time. It requires an open transaction.
-        UUID is the dataset where a disclosure was first seen, matching the
-        file-based scraper, which kept the first dataset processed.
+        UUID is the dataset where a disclosure was first seen, so a row keeps
+        the same UUID however many later datasets repeat it.
         """
         with self.connection.cursor(name='export_records') as cursor:
             cursor.itersize = batch_size
