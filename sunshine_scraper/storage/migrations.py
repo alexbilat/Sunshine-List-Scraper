@@ -184,6 +184,7 @@ def baseline(connection, through_version, directory=MIGRATIONS_DIRECTORY):
 
 
 def record_migration(connection, migration):
+    """Mark one file as applied, with the checksum later runs compare against."""
     connection.execute(
         'INSERT INTO schema_migrations (version, filename, checksum) VALUES (%s, %s, %s)',
         (migration.version, migration.filename, migration.checksum))

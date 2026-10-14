@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def main(argv=None):
+    """Run one database command; return 0 on success or 1 on a reported error."""
     parser = argparse.ArgumentParser(description='PostgreSQL tools for the Sunshine List scraper')
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('check', help='Check access to an existing PostgreSQL server')
@@ -54,6 +55,7 @@ def main(argv=None):
 
 
 def run_migrate(settings, arguments):
+    """Show migration status, baseline, or apply pending migrations."""
     # Autocommit: the runner gives each migration file its own transaction.
     with open_connection(settings, autocommit=True) as connection:
         if arguments.status:

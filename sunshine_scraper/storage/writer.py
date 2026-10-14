@@ -58,14 +58,17 @@ class PostgresDisclosureWriter:
         return bool(row[0])
 
     def release_sync_lock(self):
+        """Let the next sync start; disconnecting would also release the lock."""
         self.connection.execute('SELECT pg_advisory_unlock(%s)', (SYNC_LOCK_ID,))
 
     def start_run(self, started_at):
+        """Create a sync_runs row and return its id for the run's other records."""
         row = self.connection.execute(
             'INSERT INTO sync_runs (started_at) VALUES (%s) RETURNING id', (started_at,)).fetchone()
         return row[0]
 
     def finish_run(self, run_id, *, status, finished_at, total, loaded, unchanged, failed):
+        """Store the run's final status and how many datasets ended each way."""
         self.connection.execute(
             """
             UPDATE sync_runs
@@ -193,6 +196,7 @@ class PostgresDisclosureWriter:
             (etag, last_modified, resource_id))
 
     def record_resource_result(self, run_id, result):
+        """Add one dataset's outcome (a ResourceResult) to the run's history."""
         self.connection.execute(
             """
             INSERT INTO sync_run_resources

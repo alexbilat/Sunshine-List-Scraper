@@ -222,4 +222,5 @@ def describe_error(error):
 
 
 def now():
+    """Current time in UTC; run records store aware timestamps, never local time."""
     return datetime.now(timezone.utc)

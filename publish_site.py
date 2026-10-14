@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def main(argv=None):
+    """Build the site, then push it unless --no-push; return the exit code."""
     parser = argparse.ArgumentParser(description='Build and publish the static Sunshine List website')
     parser.add_argument('--no-push', action='store_true',
                         help=f'only build into {config.site_dir}/ without publishing')
