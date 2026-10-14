@@ -63,7 +63,7 @@ def run_migrate(settings, arguments):
                        pending_migrations(available, applied)}
             for migration in available:
                 state = 'pending' if migration.version in pending else 'applied'
-                print(f'{state}	{migration.filename}')
+                print(f'{state}\t{migration.filename}')
         elif arguments.baseline:
             for filename in baseline(connection, arguments.baseline):
                 logger.info('Recorded %s as applied without running it', filename)
