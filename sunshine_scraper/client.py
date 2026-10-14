@@ -20,10 +20,13 @@ logger = logging.getLogger(__name__)
 # 429 means rate limiting; the selected 5xx codes indicate server/gateway errors.
 RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 DOWNLOAD_MANIFEST_PATH = '/public-sector-salary-disclosure_artifacts/pssdfiles.json'
+# Matched with fullmatch, so the whole path must fit; no ^/$ anchors needed.
 MODERN_DISCLOSURE_PATH = re.compile(
-    r'^/public-sector-salary-disclosure/(\d{4})/'
-    r'(all-sectors-and-seconded-employees|addendum)/?$'
+    r'/public-sector-salary-disclosure/(\d{4})/'
+    r'(all-sectors-and-seconded-employees|addendum)/?'
 )
+# A CKAN dataset link ends in the resource segment followed by an identifier.
+CKAN_RESOURCE_PATH = re.compile(r'/resource/[^/]+/?$')
 
 
 def resource_id_from_link(link):
@@ -100,7 +103,8 @@ def discover_resource_links(url, **request_options):
     modern_sources = []
     for link in soup.find_all('a', href=True):
         href = urljoin(url, link['href'])
-        modern_match = MODERN_DISCLOSURE_PATH.fullmatch(urlsplit(href).path)
+        path = urlsplit(href).path
+        modern_match = MODERN_DISCLOSURE_PATH.fullmatch(path)
         if modern_match:
             year, page_kind = modern_match.groups()
             kind = 'Compendium' if page_kind == 'all-sectors-and-seconded-employees' else 'Addendum'
@@ -110,9 +114,9 @@ def discover_resource_links(url, **request_options):
             continue
         # Navigation links or query strings mentioning "resource" are not
         # CKAN datasets. Require the resource segment followed by an identifier.
-        lowercase_path = urlsplit(href).path.lower()
+        lowercase_path = path.lower()
         if ('public-sector-salary-disclosure' not in lowercase_path
-                or not re.search(r'/resource/[^/]+/?$', lowercase_path)):
+                or not CKAN_RESOURCE_PATH.search(lowercase_path)):
             continue
         # Ignore query strings and trailing slashes when identifying a resource.
         resource_id = resource_id_from_link(href)
