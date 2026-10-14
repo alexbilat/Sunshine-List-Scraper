@@ -75,7 +75,9 @@ def create_charts(yearly_summary, top_titles, yearly_chart_path, titles_chart_pa
         title_axis.barh(labels, values, color='teal')
         title_axis.set_xlabel('Number of Appearances')
         title_axis.xaxis.set_major_locator(mticker.MaxNLocator(integer=True))
-        title_axis.set_title('Top 10 Most Common Job Titles on the Sunshine List')
+        # Name the number actually drawn: a small database may have fewer
+        # titles than the pipeline asked for.
+        title_axis.set_title(f'Top {len(top_titles)} Most Common Job Titles on the Sunshine List')
         figure.tight_layout()
         figure.savefig(titles_chart_path, dpi=150)
     finally:

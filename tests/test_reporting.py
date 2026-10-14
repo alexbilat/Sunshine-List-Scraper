@@ -43,6 +43,17 @@ class ReportingTests(unittest.TestCase):
             self.assertGreater(titles.stat().st_size, 0)
             self.assertEqual(plt.get_fignums(), [])
 
+    def test_title_chart_heading_counts_the_titles_drawn(self):
+        from matplotlib.axes import Axes
+
+        with patch.object(Axes, 'set_title') as set_title, \
+                patch('matplotlib.figure.Figure.savefig'):
+            create_charts([YearSummary(2024, 1, Decimal('12000000'))],
+                          [TitleCount('Developer', 2), TitleCount('Nurse', 1)],
+                          'yearly.png', 'titles.png')
+        set_title.assert_called_with('Top 2 Most Common Job Titles on the Sunshine List')
+        self.assertEqual(plt.get_fignums(), [])
+
     def test_summary_is_logged_newest_first_in_dollars(self):
         summary = [YearSummary(2023, 2, Decimal('12345678.5000')),
                    YearSummary(2024, 1, Decimal('10000000'))]
