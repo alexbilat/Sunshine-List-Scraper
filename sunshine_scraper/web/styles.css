@@ -211,6 +211,76 @@ select:disabled { color: var(--ink-soft); border-color: var(--rule); cursor: pro
   }
 }
 
+/* --- Status messages ---------------------------------------------------------- */
+
+.message { margin: 12px 0; color: var(--ink); }
+.message:empty { display: none; }
+.message.loading::before {
+  content: "";
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-right: 8px;
+  background: var(--rule);
+  vertical-align: baseline;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .message.loading::before { animation: blink 1s steps(2, start) infinite; }
+}
+@keyframes blink { to { visibility: hidden; } }
+.message.error {
+  padding: 10px 12px;
+  border: 1px solid var(--error);
+  color: var(--error);
+  font-weight: 600;
+}
+/* Tables are faded while a new list loads, so the old one isn't mistaken
+   for the answer. */
+table[aria-busy="true"] { opacity: 0.45; }
+
+/* --- Agate tables ------------------------------------------------------------- */
+/* Dense rows, thin rules, figures right-aligned hard to the column edge. */
+
+.table-wrap { overflow-x: auto; } /* wide tables scroll inside, never the page */
+table.agate {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  font-stretch: 85%;          /* the same condensed width as the figures */
+  line-height: 1.2;
+}
+.agate th {
+  padding: 8px 12px 6px 0;
+  border-bottom: 1px solid var(--ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-stretch: 85%;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.agate td {
+  padding: 5px 16px 5px 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: baseline;
+}
+.agate th:last-child,
+.agate td:last-child { padding-right: 0; }
+.agate tbody tr:hover { background: var(--paper-raised); }
+.agate .num {
+  text-align: right;
+  white-space: nowrap;
+  font-stretch: 85%;
+}
+.agate td.num { font-weight: 700; }
+.agate .rank { width: 3ch; color: var(--ink-soft); }
+.agate td.rank { font-weight: 400; }
+.agate .name { font-weight: 700; }
+.agate .employer { color: var(--ink-soft); }
+/* The latest year's row in the years table carries the spot colour. */
+.agate tr.latest td { color: var(--spot); font-weight: 700; }
+
 /* --- Footer ------------------------------------------------------------------- */
 
 .colophon { border-top: 2px solid var(--ink); }
@@ -248,27 +318,6 @@ select:disabled { color: var(--ink-soft); border-color: var(--rule); cursor: pro
   border-radius: 0 0 8px 8px;
   padding: 20px;
 }
-
-/* Status messages */
-.message { min-height: 1.5em; margin: 0 0 12px; color: var(--muted); }
-.message:empty { display: none; }
-.message.loading { font-style: italic; }
-.message.error {
-  color: var(--error);
-  background: var(--error-bg);
-  border: 1px solid var(--error);
-  border-radius: 6px;
-  padding: 8px 12px;
-}
-
-/* Tables scroll sideways inside their box on narrow screens, so the page
-   itself never scrolls horizontally. */
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
-th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
-th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-tbody tr:nth-child(even) { background: var(--row-alt); }
-.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* Chart */
 .chart { margin: 0 0 20px; }
