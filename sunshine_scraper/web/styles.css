@@ -419,6 +419,19 @@ table.agate {
   font-stretch: 85%;          /* the same condensed width as the figures */
   line-height: 1.2;
 }
+/* Short tables keep a column's measure so each figure sits near its label
+   instead of across an empty screen. */
+/* Each list tab is one column wide: its heading rule, controls, chart and
+   table all share the same right edge. The years and titles lists are a
+   fixed measure; the salaries panel fits its widest row, so every salary
+   sits just after the longest employer. */
+#panel-years,
+#panel-titles { max-width: 40rem; }
+#panel-salaries {
+  width: fit-content;
+  min-width: min(100%, 40rem);
+  max-width: 100%;
+}
 .agate th {
   padding: 8px 12px 6px 0;
   border-bottom: 1px solid var(--ink);
@@ -446,6 +459,9 @@ table.agate {
 .agate td.num { font-weight: 700; }
 .agate .rank { width: 3ch; color: var(--ink-soft); }
 .agate td.rank { font-weight: 400; }
+@media (min-width: 601px) {
+  .agate .name { white-space: nowrap; }
+}
 .agate .name { font-weight: 700; }
 .agate .employer { color: var(--ink-soft); }
 /* The latest year's row in the years table carries the spot colour. */
