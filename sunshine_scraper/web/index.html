@@ -21,14 +21,17 @@
   <script src="app.js" defer></script>
 </head>
 <body>
-  <header class="site-header">
-    <div>
-      <h1>Ontario Sunshine List</h1>
-      <p class="subtitle">Public sector salaries of $100,000 or more, from Ontario's official disclosures.</p>
+  <a class="skip-link" href="#main">Skip to the data</a>
+
+  <header class="masthead">
+    <div class="masthead-inner">
+      <h1 class="wordmark">Ontario Sunshine List</h1>
+      <p class="health" id="health" role="status">
+        <span class="dot" aria-hidden="true"></span><span id="health-text">Checking&hellip;</span>
+      </p>
+      <p class="masthead-source">Public sector salaries of $100,000 or more, from
+        <a href="https://www.ontario.ca/page/public-sector-salary-disclosure" rel="noopener noreferrer">Ontario's Public Sector Salary Disclosure</a>.</p>
     </div>
-    <p class="health" id="health" role="status">
-      <span class="dot" aria-hidden="true"></span><span id="health-text">Checking…</span>
-    </p>
   </header>
 
   <!-- Tabs: one panel visible at a time. Buttons (not links) because they
@@ -39,7 +42,7 @@
     <button type="button" role="tab" id="tab-titles" aria-controls="panel-titles" aria-selected="false">Common job titles</button>
   </nav>
 
-  <main>
+  <main id="main">
     <section class="panel" id="panel-salaries" role="tabpanel" aria-labelledby="tab-salaries">
       <h2>Highest salaries in a year</h2>
       <form class="controls" id="salaries-form">

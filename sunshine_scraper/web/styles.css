@@ -73,6 +73,71 @@ a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 0.2em
 a:hover { color: var(--spot); }
 html { scrollbar-color: var(--rule) var(--paper); }
 
+/* All page sections share one centred measure and one side gutter. */
+.masthead-inner,
+.tabs-inner,
+main,
+.colophon-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding-inline: clamp(16px, 4vw, 48px);
+}
+
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -100px;
+  padding: 8px 12px;
+  background: var(--ink);
+  color: var(--paper);
+  z-index: 10;
+}
+.skip-link:focus { top: 8px; }
+
+/* --- Masthead ----------------------------------------------------------------- */
+
+.masthead { border-bottom: 2px solid var(--ink); }
+.masthead-inner {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 4px 24px;
+  padding-block: 18px 14px;
+}
+.wordmark {
+  margin: 0;
+  font-size: clamp(1.4rem, 1rem + 1.4vw, 1.9rem);
+  font-weight: 800;
+  font-stretch: 75%;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+.masthead-source {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+/* Status: grey square while checking, ink when ok, red on error. */
+.health {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-stretch: 85%;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.health .dot { width: 8px; height: 8px; background: var(--rule); }
+.health[data-state="ok"] .dot { background: var(--ink); }
+.health[data-state="error"] { color: var(--error); }
+.health[data-state="error"] .dot { background: var(--error); }
+
 /* Temporary: the old colour names, still used by the rules that have not
    been restyled yet. Removed once nothing refers to them. */
 :root {
@@ -92,25 +157,6 @@ html { scrollbar-color: var(--rule) var(--paper); }
 /* Temporary: keep the old centred column until the page sections have
    their own containers. */
 body { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
-
-h1 { margin: 0; font-size: 1.75rem; }
-h2 { margin: 0 0 16px; font-size: 1.2rem; }
-
-.site-header {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-.subtitle { margin: 4px 0 0; color: var(--muted); }
-
-/* Health indicator: grey while checking, green when ok, red on error. */
-.health { margin: 4px 0 0; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.9rem; }
-.health .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
-.health[data-state="ok"] .dot { background: var(--ok); }
-.health[data-state="error"] .dot { background: var(--error); }
 
 /* Tabs */
 .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border); }
