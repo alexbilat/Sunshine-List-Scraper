@@ -1,52 +1,100 @@
 /* Styles for the Sunshine List page.
+
+   The look borrows from the way Ontarians have always met the list: the
+   newspaper's agate tables. That means a newsprint-grey page, pure ink, one
+   blue spot colour, a single condensed typeface, square corners and thin
+   rules. Grey is only ever used for data, never for decoration.
+
    Colours are variables so dark mode only has to change them in one place. */
-:root {
-  --bg: #f7f7f5;
-  --surface: #ffffff;
-  --text: #1d1d1b;
-  --muted: #5f5f5a;
-  --border: #deded8;
-  --accent: #b45309;        /* warm "sunshine" amber, dark enough for white text */
-  --accent-text: #ffffff;
-  --bar: #d97706;
-  --ok: #15803d;
-  --error: #b91c1c;
-  --error-bg: #fef2f2;
-  --row-alt: #fafaf8;
-  color-scheme: light dark;
+
+/* One self-hosted font file (Archivo, SIL Open Font License, see
+   fonts/OFL.txt). It is a variable font with a width axis, so the same file
+   gives both the condensed "agate" figures and the normal-width body text.
+   It is served from this site, which the security policy allows. */
+@font-face {
+  font-family: "Archivo";
+  src: url("fonts/archivo-latin-wdth.woff2") format("woff2");
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-style: normal;
+  font-display: swap;
 }
 
+:root {
+  --paper: #e6e6e3;        /* newsprint grey, not cream */
+  --paper-raised: #efefec; /* table header and hover rows */
+  --ink: #161616;
+  --ink-soft: #3d3d3a;     /* secondary text; 9.9:1 on --paper */
+  --rule: #8c8c88;         /* thin rules between rows */
+  --spot: #1f3a93;         /* the one spot colour: latest year, selection */
+  --spot-ink: #ffffff;
+  --column: #161616;       /* the year columns in the chart */
+  --error: #a3221a;
+  --focus: #1f3a93;
+  --font: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  color-scheme: light;
+}
+
+/* Dark mode: the same page printed in reverse, for reading late at night. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #161614;
-    --surface: #1f1f1d;
-    --text: #ecece8;
-    --muted: #a3a39c;
-    --border: #3a3a36;
-    --accent: #f59e0b;
-    --accent-text: #1d1d1b;
-    --bar: #f59e0b;
-    --ok: #4ade80;
-    --error: #f87171;
-    --error-bg: #2a1616;
-    --row-alt: #242422;
+    --paper: #121212;
+    --paper-raised: #1c1c1b;
+    --ink: #e6e6e3;
+    --ink-soft: #b4b4af;
+    --rule: #5c5c58;
+    --spot: #9db1ff;
+    --spot-ink: #121212;
+    --column: #e6e6e3;
+    --error: #ff8a80;
+    --focus: #9db1ff;
+    color-scheme: dark;
   }
 }
 
 * { box-sizing: border-box; }
 
+html { -webkit-text-size-adjust: 100%; }
+
 body {
-  margin: 0 auto;
-  max-width: 960px;
-  padding: 24px 16px 48px;
-  background: var(--bg);
-  color: var(--text);
-  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1rem/1.5 var(--font);
+  font-stretch: 100%;
+  font-variant-numeric: tabular-nums; /* every figure lines up in columns */
+  -webkit-font-smoothing: antialiased;
 }
+
+/* Browser surfaces carry the design too. */
+::selection { background: var(--spot); color: var(--spot-ink); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+a:hover { color: var(--spot); }
+html { scrollbar-color: var(--rule) var(--paper); }
+
+/* Temporary: the old colour names, still used by the rules that have not
+   been restyled yet. Removed once nothing refers to them. */
+:root {
+  --bg: var(--paper);
+  --surface: var(--paper);
+  --text: var(--ink);
+  --muted: var(--ink-soft);
+  --border: var(--rule);
+  --accent: var(--spot);
+  --accent-text: var(--spot-ink);
+  --bar: var(--column);
+  --ok: #1f6b3a;
+  --error-bg: transparent;
+  --row-alt: var(--paper-raised);
+}
+
+/* Temporary: keep the old centred column until the page sections have
+   their own containers. */
+body { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
 
 h1 { margin: 0; font-size: 1.75rem; }
 h2 { margin: 0 0 16px; font-size: 1.2rem; }
-a { color: var(--accent); }
 
 .site-header {
   display: flex;
@@ -116,7 +164,6 @@ button[type="submit"] {
   cursor: pointer;
 }
 button[type="submit"]:disabled { opacity: 0.5; cursor: progress; }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 /* Status messages */
 .message { min-height: 1.5em; margin: 0 0 12px; color: var(--muted); }
