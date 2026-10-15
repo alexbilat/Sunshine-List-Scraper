@@ -130,6 +130,7 @@ const wholeNumber = new Intl.NumberFormat('en-CA');
 // Non-ASCII characters are written as escapes so this file reads the same
 // whatever character set a browser assumes for it.
 const ELLIPSIS = '\u2026';
+const EM_DASH = '\u2014';
 
 // Format exact integer cents as "$123,456.78".
 // The API sends integer cents so no precision is lost. Splitting into whole
@@ -137,7 +138,7 @@ const ELLIPSIS = '\u2026';
 // dividing into a float and rounding could show the wrong last digit.
 function formatCents(cents) {
   if (cents === null || cents === undefined) {
-    return '\u2014'; // an em dash: "no value"
+    return EM_DASH; // "no value"
   }
   const dollars = Math.floor(cents / 100);
   const remainder = String(cents % 100).padStart(2, '0');
@@ -148,18 +149,40 @@ function formatCents(cents) {
 
 const $ = (id) => document.getElementById(id);
 
-// Build a table row from plain values. textContent makes every value inert text.
-function tableRow(cells) {
-  const row = document.createElement('tr');
-  for (const { text, numeric } of cells) {
-    const cell = document.createElement('td');
-    cell.textContent = text;
-    if (numeric) {
-      cell.className = 'num';
-    }
-    row.append(cell);
+// Make an element with an optional class and text. textContent keeps it inert.
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+// Build a table row from cells. Each cell is { text, className } or a ready
+// <td> element (for cells with more than one piece of text).
+function tableRow(cells, rowClass) {
+  const row = element('tr', rowClass);
+  for (const cell of cells) {
+    row.append(cell instanceof Node ? cell : element('td', cell.className, cell.text));
   }
   return row;
+}
+
+// One salary as a table row.
+function salaryRow(salary, index) {
+  return tableRow([
+    { text: String(index + 1), className: 'num rank' },
+    { text: salary.name, className: 'name' },
+    { text: salary.employer, className: 'employer employer-col' },
+    { text: formatCents(salary.salary_cents), className: 'num' },
+  ]);
+}
+
+function titleRow(title, index) {
+  return tableRow([
+    { text: String(index + 1), className: 'num rank' },
+    { text: title.job_title },
+    { text: wholeNumber.format(title.appearances), className: 'num' },
+  ]);
 }
 
 // Replace a table's rows, and hide the table when there is nothing to show.
@@ -169,9 +192,9 @@ function fillTable(table, rows) {
 }
 
 // Show a status line. kind is '' (neutral), 'loading' or 'error'.
-function showMessage(element, text, kind = '') {
-  element.textContent = text;
-  element.className = `message ${kind}`.trim();
+function showMessage(target, text, kind = '') {
+  target.textContent = text;
+  target.className = `message ${kind}`.trim();
 }
 
 // Run a request while its button is disabled. Stops double clicks from sending
@@ -250,12 +273,7 @@ async function showTopSalaries() {
   await whileBusy($('salaries-submit'), async () => {
     try {
       const salaries = await source.topSalaries(year, limit);
-      fillTable(table, salaries.map((salary, index) => tableRow([
-        { text: String(index + 1), numeric: true },
-        { text: salary.name },
-        { text: salary.employer },
-        { text: formatCents(salary.salary_cents), numeric: true },
-      ])));
+      fillTable(table, salaries.map(salaryRow));
       showMessage(message, salaries.length
         ? `Top ${salaries.length} salaries disclosed for ${year}.`
         : `No records for ${year}.`);
@@ -275,8 +293,8 @@ async function showYears() {
     const years = await loadYears();
     fillTable($('years-table'), [...years].reverse().map((year) => tableRow([
       { text: String(year.year) },
-      { text: wholeNumber.format(year.people), numeric: true },
-      { text: formatCents(year.average_salary_cents), numeric: true },
+      { text: wholeNumber.format(year.people), className: 'num' },
+      { text: formatCents(year.average_salary_cents), className: 'num' },
     ])));
     drawYearsChart(years);
     showMessage(message, years.length ? '' : 'The database has no salary records yet.');
@@ -360,11 +378,7 @@ async function showTitles() {
   await whileBusy($('titles-submit'), async () => {
     try {
       const titles = await source.titles(limit);
-      fillTable(table, titles.map((title, index) => tableRow([
-        { text: String(index + 1), numeric: true },
-        { text: title.job_title },
-        { text: wholeNumber.format(title.appearances), numeric: true },
-      ])));
+      fillTable(table, titles.map(titleRow));
       showMessage(message, titles.length ? '' : 'No job titles recorded yet.');
     } catch (error) {
       fillTable(table, []);
