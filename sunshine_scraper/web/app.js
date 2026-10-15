@@ -252,16 +252,18 @@ function loadYears() {
   return yearsPromise;
 }
 
+// Only years that actually have people listed, oldest first.
+const listedYears = (years) =>
+  years.filter((year) => year.people > 0).sort((a, b) => a.year - b.year);
+
 // --- Panel: top salaries ------------------------------------------------------
 
 async function setUpSalaries() {
   const select = $('salaries-year');
   const message = $('salaries-message');
   try {
-    const years = await loadYears();
-    // Newest first, and only years that actually have people listed.
-    const available = years.filter((year) => year.people > 0).map((year) => year.year)
-      .sort((a, b) => b - a);
+    // Newest first in the picker.
+    const available = listedYears(await loadYears()).map((year) => year.year).reverse();
     if (available.length === 0) {
       select.replaceChildren(new Option('No data yet', ''));
       showMessage(message, 'The database has no salary records yet. Run the scraper first.');
@@ -292,18 +294,19 @@ function showTopSalaries() {
   });
 }
 
-// --- Panel: years overview ----------------------------------------------------
+// --- Panel: years -------------------------------------------------------------
 
 async function showYears() {
   const message = $('years-message');
   showMessage(message, `Loading yearly totals${ELLIPSIS}`, 'loading');
   try {
-    const years = await loadYears();
+    const years = listedYears(await loadYears());
+    const latestYear = years.length ? years[years.length - 1].year : null;
     fillTable($('years-table'), [...years].reverse().map((year) => tableRow([
       { text: String(year.year) },
       { text: wholeNumber.format(year.people), className: 'num' },
       { text: formatCents(year.average_salary_cents), className: 'num' },
-    ])));
+    ], year.year === latestYear ? 'latest' : '')));
     drawYearsChart(years);
     showMessage(message, years.length ? '' : 'The database has no salary records yet.');
   } catch (error) {
