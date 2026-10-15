@@ -464,3 +464,27 @@ table.agate {
   font-size: 0.875rem;
 }
 .colophon p { margin: 0; }
+
+/* --- Narrow screens ----------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .lead,
+  .digest { grid-template-columns: minmax(0, 1fr); }
+  .lead { gap: 32px; padding-top: 28px; }
+}
+
+@media (max-width: 600px) {
+  .masthead-inner { grid-template-columns: 1fr; }
+  /* Narrower letters and padding so all four tabs fit on a phone. */
+  .tabs-inner { padding-inline: 0; }
+  .tabs button { flex: 1 1 auto; padding-inline: 8px; font-stretch: 72%; letter-spacing: 0.02em; }
+  .tabs button:first-child { border-left: 0; }
+  .tabs button:last-child { border-right: 0; }
+  .panel-head { padding-top: 28px; }
+  /* Names and employers stack in one cell so the salary keeps its column. */
+  .agate .employer-col { display: none; }
+  .agate .employer-inline { display: block; font-weight: 400; color: var(--ink-soft); }
+}
+@media (min-width: 601px) {
+  .agate .employer-inline { display: none; }
+}

@@ -170,11 +170,15 @@ function tableRow(cells, rowClass) {
   return row;
 }
 
-// One salary as a table row.
+// One salary as a table row. On narrow screens the employer column is hidden
+// by styles.css and the employer shown under the name instead, so the salary
+// keeps its own column without the table scrolling sideways.
 function salaryRow(salary, index) {
+  const who = element('td', 'name', salary.name);
+  who.append(element('span', 'employer-inline', salary.employer));
   return tableRow([
     { text: String(index + 1), className: 'num rank' },
-    { text: salary.name, className: 'name' },
+    who,
     { text: salary.employer, className: 'employer employer-col' },
     { text: formatCents(salary.salary_cents), className: 'num' },
   ]);
