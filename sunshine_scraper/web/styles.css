@@ -169,6 +169,48 @@ main,
 .tabs button:focus-visible { outline-offset: -4px; outline-color: var(--paper); }
 .tabs button[aria-selected="false"]:focus-visible { outline-color: var(--focus); }
 
+/* --- Forms -------------------------------------------------------------------- */
+
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 0; }
+.controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-stretch: 85%;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+select {
+  min-height: 44px;           /* comfortable touch target */
+  min-width: 8.5rem;
+  padding: 8px 36px 8px 12px;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  background-color: var(--paper);
+  /* A drawn chevron instead of the browser's own arrow, so the control
+     matches the page. It's an inline SVG image, which the policy allows. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23161616' stroke-width='2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;            /* the label is small caps; the choice is body size */
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  appearance: none;
+  cursor: pointer;
+}
+select:hover { background-color: var(--paper-raised); }
+select:disabled { color: var(--ink-soft); border-color: var(--rule); cursor: progress; }
+@media (prefers-color-scheme: dark) {
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23e6e6e3' stroke-width='2'/%3E%3C/svg%3E");
+  }
+}
+
 /* --- Footer ------------------------------------------------------------------- */
 
 .colophon { border-top: 2px solid var(--ink); }
@@ -206,30 +248,6 @@ main,
   border-radius: 0 0 8px 8px;
   padding: 20px;
 }
-
-/* Form controls */
-.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 12px; }
-.controls label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; color: var(--muted); }
-select, button[type="submit"] {
-  font: inherit;
-  min-height: 40px; /* comfortable touch target */
-  border-radius: 6px;
-}
-select {
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-}
-button[type="submit"] {
-  padding: 8px 18px;
-  border: none;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-weight: 600;
-  cursor: pointer;
-}
-button[type="submit"]:disabled { opacity: 0.5; cursor: progress; }
 
 /* Status messages */
 .message { min-height: 1.5em; margin: 0 0 12px; color: var(--muted); }
