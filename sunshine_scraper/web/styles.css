@@ -302,6 +302,43 @@ h2, h3 { margin: 0; font-weight: 800; font-stretch: 80%; letter-spacing: 0; }
   to { transform: scaleY(1); }
 }
 
+/* --- Overview: digest tables -------------------------------------------------- */
+
+.digest {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 40px 56px;
+  padding-top: 32px;
+}
+.block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--ink);
+}
+.block-head h3 { font-size: 1.25rem; text-transform: uppercase; letter-spacing: 0.02em; }
+.block-head h3 span::before { content: ", "; }
+
+/* A plain action that looks like what it is: a link-like button. */
+.text-button {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--spot);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.text-button:hover { color: var(--ink); }
+
 /* --- Forms -------------------------------------------------------------------- */
 
 .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 0; }

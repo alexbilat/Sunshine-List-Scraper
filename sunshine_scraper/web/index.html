@@ -46,6 +46,8 @@
   </nav>
 
   <main id="main">
+    <!-- Overview: the at-a-glance answers, built from the same three data
+         sources as the other tabs (years, top salaries, top titles). -->
     <section class="panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
       <div class="lead">
         <div class="lead-text">
@@ -67,6 +69,39 @@
           </figcaption>
           <div class="columns-body" id="overview-chart-body"></div>
         </figure>
+      </div>
+
+      <div class="digest">
+        <section class="digest-block" aria-labelledby="digest-salaries-heading">
+          <div class="block-head">
+            <h3 id="digest-salaries-heading">Highest paid<span id="digest-salaries-year"></span></h3>
+            <button type="button" class="text-button" data-open-tab="tab-salaries">All top salaries</button>
+          </div>
+          <p class="message" id="digest-salaries-message" role="status" aria-live="polite"></p>
+          <div class="table-wrap">
+            <table id="digest-salaries-table" class="agate" hidden>
+              <thead>
+                <tr><th scope="col" class="num rank">#</th><th scope="col">Name</th><th scope="col" class="employer-col">Employer</th><th scope="col" class="num">Salary paid</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="digest-block" aria-labelledby="digest-titles-heading">
+          <div class="block-head">
+            <h3 id="digest-titles-heading">Most listed job titles<span id="digest-titles-years"></span></h3>
+            <button type="button" class="text-button" data-open-tab="tab-titles">All job titles</button>
+          </div>
+          <p class="message" id="digest-titles-message" role="status" aria-live="polite"></p>
+          <div class="table-wrap">
+            <table id="digest-titles-table" class="agate" hidden>
+              <thead>
+                <tr><th scope="col" class="num rank">#</th><th scope="col">Job title</th><th scope="col" class="num">Times listed</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </section>
 

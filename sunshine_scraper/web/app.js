@@ -132,6 +132,9 @@ const wholeNumber = new Intl.NumberFormat('en-CA');
 const ELLIPSIS = '\u2026';
 const EM_DASH = '\u2014';
 
+// How many rows the overview's two short tables show.
+const DIGEST_ROWS = '10';
+
 // Format exact integer cents as "$123,456.78".
 // The API sends integer cents so no precision is lost. Splitting into whole
 // dollars and leftover cents with integer arithmetic keeps it exact here too;
@@ -442,6 +445,7 @@ async function showOverview() {
       $('headline-people').textContent = EM_DASH;
       $('headline-words').textContent = 'No disclosures in the database yet.';
       showMessage(message, 'Run the scraper first, then reload this page.');
+      $('digest-salaries-table').hidden = true;
       return;
     }
     const latest = years[years.length - 1];
@@ -460,11 +464,36 @@ async function showOverview() {
       idPrefix: 'overview',
       onPick: openYear,
     }, years);
+
+    $('digest-salaries-year').textContent = String(latest.year);
+    // The titles are counted over every year, so say which years, or the
+    // table could be read as this year's counts next to this year's salaries.
+    $('digest-titles-years').textContent = `${first.year}\u2013${latest.year}`;
+    loadTable({
+      table: $('digest-salaries-table'),
+      message: $('digest-salaries-message'),
+      loading: `Loading salaries${ELLIPSIS}`,
+      fetchRows: () => source.topSalaries(latest.year, DIGEST_ROWS),
+      toRow: salaryRow,
+      done: (items) => (items.length ? '' : `No records for ${latest.year}.`),
+    });
   } catch (error) {
     $('headline-people').textContent = EM_DASH;
     $('headline-words').textContent = 'The list could not be loaded.';
     showMessage(message, error.message, 'error');
+    showMessage($('digest-salaries-message'), '');
   }
+}
+
+function showDigestTitles() {
+  loadTable({
+    table: $('digest-titles-table'),
+    message: $('digest-titles-message'),
+    loading: `Loading job titles${ELLIPSIS}`,
+    fetchRows: () => source.titles(DIGEST_ROWS),
+    toRow: titleRow,
+    done: (items) => (items.length ? '' : 'No job titles recorded yet.'),
+  });
 }
 
 // --- Panel: top salaries ------------------------------------------------------
@@ -609,6 +638,14 @@ function setUpTabs() {
       }
     });
   });
+  // "All top salaries" and similar links from the overview.
+  for (const button of document.querySelectorAll('[data-open-tab]')) {
+    button.addEventListener('click', () => {
+      const tab = $(button.dataset.openTab);
+      selectTab(tab);
+      tab.focus();
+    });
+  }
 }
 
 // --- Start --------------------------------------------------------------------
@@ -626,6 +663,7 @@ function start() {
   $('titles-limit').addEventListener('change', showTitles);
   checkHealth();
   showOverview();
+  showDigestTitles();
 }
 
 start();
