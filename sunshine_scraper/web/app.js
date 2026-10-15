@@ -197,14 +197,28 @@ function showMessage(target, text, kind = '') {
   target.className = `message ${kind}`.trim();
 }
 
-// Run a request while its button is disabled. Stops double clicks from sending
-// the same request twice and makes it obvious that something is happening.
-async function whileBusy(button, work) {
-  if (button) button.disabled = true;
+// Load rows into a table, showing progress and errors in its message line.
+// Selects update the table as soon as they change, so a quick second change
+// can start a new request before the first one answers. Each table remembers
+// its latest request, and an older answer arriving late is ignored instead
+// of overwriting the newer one.
+const latestRequest = new WeakMap();
+async function loadTable({ table, message, loading, fetchRows, toRow, done }) {
+  const ticket = {};
+  latestRequest.set(table, ticket);
+  showMessage(message, loading, 'loading');
+  table.setAttribute('aria-busy', 'true');
   try {
-    await work();
+    const items = await fetchRows();
+    if (latestRequest.get(table) !== ticket) return;
+    fillTable(table, items.map(toRow));
+    showMessage(message, done(items));
+  } catch (error) {
+    if (latestRequest.get(table) !== ticket) return;
+    fillTable(table, []);
+    showMessage(message, error.message, 'error');
   } finally {
-    if (button) button.disabled = false;
+    if (latestRequest.get(table) === ticket) table.removeAttribute('aria-busy');
   }
 }
 
@@ -255,32 +269,26 @@ async function setUpSalaries() {
     }
     select.replaceChildren(...available.map((year) => new Option(String(year), String(year))));
     select.disabled = false;
-    $('salaries-submit').disabled = false;
-    await showTopSalaries();
+    showTopSalaries();
   } catch (error) {
     select.replaceChildren(new Option('Unavailable', ''));
     showMessage(message, error.message, 'error');
   }
 }
 
-async function showTopSalaries() {
+function showTopSalaries() {
   const year = $('salaries-year').value;
   const limit = $('salaries-limit').value;
-  const message = $('salaries-message');
-  const table = $('salaries-table');
   if (!year) return;
-  showMessage(message, `Loading salaries for ${year}${ELLIPSIS}`, 'loading');
-  await whileBusy($('salaries-submit'), async () => {
-    try {
-      const salaries = await source.topSalaries(year, limit);
-      fillTable(table, salaries.map(salaryRow));
-      showMessage(message, salaries.length
-        ? `Top ${salaries.length} salaries disclosed for ${year}.`
-        : `No records for ${year}.`);
-    } catch (error) {
-      fillTable(table, []);
-      showMessage(message, error.message, 'error');
-    }
+  loadTable({
+    table: $('salaries-table'),
+    message: $('salaries-message'),
+    loading: `Loading salaries for ${year}${ELLIPSIS}`,
+    fetchRows: () => source.topSalaries(year, limit),
+    toRow: salaryRow,
+    done: (items) => (items.length
+      ? `Top ${items.length} salaries disclosed for ${year}.`
+      : `No records for ${year}.`),
   });
 }
 
@@ -370,20 +378,14 @@ function drawYearsChart(years) {
 
 // --- Panel: common job titles -------------------------------------------------
 
-async function showTitles() {
-  const limit = $('titles-limit').value;
-  const message = $('titles-message');
-  const table = $('titles-table');
-  showMessage(message, `Loading job titles${ELLIPSIS}`, 'loading');
-  await whileBusy($('titles-submit'), async () => {
-    try {
-      const titles = await source.titles(limit);
-      fillTable(table, titles.map(titleRow));
-      showMessage(message, titles.length ? '' : 'No job titles recorded yet.');
-    } catch (error) {
-      fillTable(table, []);
-      showMessage(message, error.message, 'error');
-    }
+function showTitles() {
+  loadTable({
+    table: $('titles-table'),
+    message: $('titles-message'),
+    loading: `Loading job titles${ELLIPSIS}`,
+    fetchRows: () => source.titles($('titles-limit').value),
+    toRow: titleRow,
+    done: (items) => (items.length ? '' : 'No job titles recorded yet.'),
   });
 }
 
@@ -433,16 +435,14 @@ function setUpTabs() {
 function start() {
   $('api-docs-link').hidden = !source.hasApiDocs;
   setUpTabs();
-  // preventDefault stops the browser's own form submission (a page reload);
-  // the forms only exist so pressing Enter works.
-  $('salaries-form').addEventListener('submit', (event) => {
-    event.preventDefault();
-    showTopSalaries();
-  });
-  $('titles-form').addEventListener('submit', (event) => {
-    event.preventDefault();
-    showTitles();
-  });
+  // The lists update as soon as a choice changes. preventDefault stops the
+  // browser's own form submission (a page reload) if Enter is pressed.
+  for (const form of [$('salaries-form'), $('titles-form')]) {
+    form.addEventListener('submit', (event) => event.preventDefault());
+  }
+  $('salaries-year').addEventListener('change', showTopSalaries);
+  $('salaries-limit').addEventListener('change', showTopSalaries);
+  $('titles-limit').addEventListener('change', showTitles);
   checkHealth();
   setUpSalaries();
 }
