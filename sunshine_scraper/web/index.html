@@ -46,24 +46,26 @@
 
   <main id="main">
     <section class="panel" id="panel-salaries" role="tabpanel" aria-labelledby="tab-salaries">
-      <h2>Highest salaries in a year</h2>
-      <!-- The lists update as soon as a choice changes; the form exists so
-           the controls are grouped and labelled together. -->
-      <form class="controls" id="salaries-form">
-        <label>Year
-          <select id="salaries-year" name="year" required disabled>
-            <option>Loading&hellip;</option>
-          </select>
-        </label>
-        <label>Show
-          <select id="salaries-limit" name="limit">
-            <option value="10">Top 10</option>
-            <option value="25" selected>Top 25</option>
-            <option value="50">Top 50</option>
-            <option value="100">Top 100</option>
-          </select>
-        </label>
-      </form>
+      <div class="panel-head">
+        <h2>Highest salaries in a year</h2>
+        <!-- The lists update as soon as a choice changes; the form exists so
+             the controls are grouped and labelled together. -->
+        <form class="controls" id="salaries-form">
+          <label>Year
+            <select id="salaries-year" name="year" required disabled>
+              <option>Loading&hellip;</option>
+            </select>
+          </label>
+          <label>Show
+            <select id="salaries-limit" name="limit">
+              <option value="10">Top 10</option>
+              <option value="25" selected>Top 25</option>
+              <option value="50">Top 50</option>
+              <option value="100">Top 100</option>
+            </select>
+          </label>
+        </form>
+      </div>
       <p class="message" id="salaries-message" role="status" aria-live="polite"></p>
       <div class="table-wrap">
         <table id="salaries-table" class="agate" hidden>
@@ -76,7 +78,9 @@
     </section>
 
     <section class="panel" id="panel-years" role="tabpanel" aria-labelledby="tab-years" hidden>
-      <h2>People listed and average salary by year</h2>
+      <div class="panel-head">
+        <h2>People listed and average salary by year</h2>
+      </div>
       <p class="message" id="years-message" role="status" aria-live="polite"></p>
       <figure class="chart" id="years-chart" hidden>
         <figcaption>People on the list each year</figcaption>
@@ -93,17 +97,19 @@
     </section>
 
     <section class="panel" id="panel-titles" role="tabpanel" aria-labelledby="tab-titles" hidden>
-      <h2>Most common job titles (all years)</h2>
-      <form class="controls" id="titles-form">
-        <label>Show
-          <select id="titles-limit" name="limit">
-            <option value="10">Top 10</option>
-            <option value="25" selected>Top 25</option>
-            <option value="50">Top 50</option>
-            <option value="100">Top 100</option>
-          </select>
-        </label>
-      </form>
+      <div class="panel-head">
+        <h2>Most common job titles, all years</h2>
+        <form class="controls" id="titles-form">
+          <label>Show
+            <select id="titles-limit" name="limit">
+              <option value="10">Top 10</option>
+              <option value="25" selected>Top 25</option>
+              <option value="50">Top 50</option>
+              <option value="100">Top 100</option>
+            </select>
+          </label>
+        </form>
+      </div>
       <p class="message" id="titles-message" role="status" aria-live="polite"></p>
       <div class="table-wrap">
         <table id="titles-table" class="agate" hidden>

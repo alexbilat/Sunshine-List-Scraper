@@ -169,6 +169,24 @@ main,
 .tabs button:focus-visible { outline-offset: -4px; outline-color: var(--paper); }
 .tabs button[aria-selected="false"]:focus-visible { outline-color: var(--focus); }
 
+/* --- Panels and headings ------------------------------------------------------ */
+
+main { padding-block: 0 64px; }
+
+h2, h3 { margin: 0; font-weight: 800; font-stretch: 80%; letter-spacing: 0; }
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 32px;
+  padding-block: 40px 16px;
+  border-bottom: 2px solid var(--ink);
+  margin-bottom: 16px;
+}
+.panel-head h2 { font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.25rem); line-height: 1.05; }
+
 /* --- Forms -------------------------------------------------------------------- */
 
 .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 0; }
@@ -309,14 +327,6 @@ table.agate {
   --ok: #1f6b3a;
   --error-bg: transparent;
   --row-alt: var(--paper-raised);
-}
-
-.panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  padding: 20px;
 }
 
 /* Chart */
