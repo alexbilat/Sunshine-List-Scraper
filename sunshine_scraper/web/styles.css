@@ -169,6 +169,20 @@ main,
 .tabs button:focus-visible { outline-offset: -4px; outline-color: var(--paper); }
 .tabs button[aria-selected="false"]:focus-visible { outline-color: var(--focus); }
 
+/* --- Footer ------------------------------------------------------------------- */
+
+.colophon { border-top: 2px solid var(--ink); }
+.colophon-inner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 32px;
+  padding-block: 20px 32px;
+  color: var(--ink);
+  font-size: 0.875rem;
+}
+.colophon p { margin: 0; }
+
 /* Temporary: the old colour names, still used by the rules that have not
    been restyled yet. Removed once nothing refers to them. */
 :root {
@@ -184,10 +198,6 @@ main,
   --error-bg: transparent;
   --row-alt: var(--paper-raised);
 }
-
-/* Temporary: keep the old centred column until the page sections have
-   their own containers. */
-body { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
 
 .panel {
   background: var(--surface);
@@ -250,5 +260,3 @@ tbody tr:nth-child(even) { background: var(--row-alt); }
 .chart .bar:hover { opacity: 0.8; }
 .chart .axis { stroke: var(--border); }
 .chart .label { fill: var(--muted); font-size: 12px; }
-
-footer { margin-top: 32px; font-size: 0.85rem; color: var(--muted); }
