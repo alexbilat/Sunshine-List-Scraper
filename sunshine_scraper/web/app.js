@@ -236,11 +236,11 @@ async function checkHealth() {
   }
 }
 
-// --- Years (used by two panels) -----------------------------------------------
+// --- Years (used by three panels) ---------------------------------------------
 
-// The years list feeds both the year picker and the overview panel, so it is
-// requested once and shared. Keeping the promise means a second caller waits
-// for the same request instead of starting another one.
+// The years list feeds the overview, the year picker and the years panel, so
+// it is requested once and shared. Keeping the promise means a second caller
+// waits for the same request instead of starting another one.
 let yearsPromise = null;
 function loadYears() {
   if (!yearsPromise) {
@@ -432,6 +432,41 @@ window.addEventListener('resize', () => {
   }, 150);
 });
 
+// --- Panel: overview ----------------------------------------------------------
+
+async function showOverview() {
+  const message = $('overview-message');
+  try {
+    const years = listedYears(await loadYears());
+    if (years.length === 0) {
+      $('headline-people').textContent = EM_DASH;
+      $('headline-words').textContent = 'No disclosures in the database yet.';
+      showMessage(message, 'Run the scraper first, then reload this page.');
+      return;
+    }
+    const latest = years[years.length - 1];
+    const first = years[0];
+    $('headline-people').textContent = wholeNumber.format(latest.people);
+    $('headline-words').textContent = `people paid $100,000 or more in ${latest.year}`;
+    $('fact-average').textContent = formatCents(latest.average_salary_cents);
+    $('fact-first-year').textContent = String(first.year);
+    $('fact-first-people').textContent = wholeNumber.format(first.people);
+    $('lead-facts').hidden = false;
+    showMessage(message, '');
+    showColumns({
+      figure: $('overview-chart'),
+      body: $('overview-chart-body'),
+      readout: $('overview-readout'),
+      idPrefix: 'overview',
+      onPick: openYear,
+    }, years);
+  } catch (error) {
+    $('headline-people').textContent = EM_DASH;
+    $('headline-words').textContent = 'The list could not be loaded.';
+    showMessage(message, error.message, 'error');
+  }
+}
+
 // --- Panel: top salaries ------------------------------------------------------
 
 // Filled once, when the years first arrive; later visits just show the panel.
@@ -534,6 +569,7 @@ function showTitles() {
 // Each panel loads its data the first time it is opened, not on page load, so
 // visitors who only want one view don't spend requests on the others.
 const panelLoaders = {
+  'panel-salaries': setUpSalaries,
   'panel-years': showYears,
   'panel-titles': showTitles,
 };
@@ -589,7 +625,7 @@ function start() {
   $('salaries-limit').addEventListener('change', showTopSalaries);
   $('titles-limit').addEventListener('change', showTitles);
   checkHealth();
-  setUpSalaries();
+  showOverview();
 }
 
 start();

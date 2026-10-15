@@ -38,14 +38,39 @@
        switch views on this page rather than going somewhere new. -->
   <nav class="tabs" aria-label="Views">
     <div class="tabs-inner" role="tablist">
-      <button type="button" role="tab" id="tab-salaries" aria-controls="panel-salaries" aria-selected="true">Top salaries</button>
+      <button type="button" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="true">Overview</button>
+      <button type="button" role="tab" id="tab-salaries" aria-controls="panel-salaries" aria-selected="false">Top salaries</button>
       <button type="button" role="tab" id="tab-years" aria-controls="panel-years" aria-selected="false">Years</button>
       <button type="button" role="tab" id="tab-titles" aria-controls="panel-titles" aria-selected="false">Job titles</button>
     </div>
   </nav>
 
   <main id="main">
-    <section class="panel" id="panel-salaries" role="tabpanel" aria-labelledby="tab-salaries">
+    <section class="panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
+      <div class="lead">
+        <div class="lead-text">
+          <h2 class="headline" id="headline">
+            <span class="figure" id="headline-people">&nbsp;</span>
+            <span class="headline-words" id="headline-words">people paid $100,000 or more</span>
+          </h2>
+          <p class="lead-facts" id="lead-facts" hidden>
+            <span><span>Average salary listed</span> <strong id="fact-average"></strong></span>
+            <span><span>People listed in <span id="fact-first-year"></span></span> <strong id="fact-first-people"></strong></span>
+          </p>
+          <p class="message" id="overview-message" role="status" aria-live="polite"></p>
+        </div>
+        <figure class="columns" id="overview-chart" hidden>
+          <figcaption>
+            <span>Length of the list each year</span>
+            <!-- Updated as the pointer or keyboard moves across the columns. -->
+            <output class="readout" id="overview-readout" aria-live="polite"></output>
+          </figcaption>
+          <div class="columns-body" id="overview-chart-body"></div>
+        </figure>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-salaries" role="tabpanel" aria-labelledby="tab-salaries" hidden>
       <div class="panel-head">
         <h2>Highest salaries in a year</h2>
         <!-- The lists update as soon as a choice changes; the form exists so
