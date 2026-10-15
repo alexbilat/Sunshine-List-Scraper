@@ -287,7 +287,7 @@ function showReadout(readout, year) {
 // chart: { figure, body, readout, idPrefix, onPick } and the years to show.
 // The drawing is sized to the box it sits in, in real pixels, so the ruled
 // lines stay one pixel thin on every screen instead of being scaled.
-function drawColumns(chart, years) {
+function drawColumns(chart, years, { animate }) {
   const { figure, body, readout, idPrefix, onPick } = chart;
   if (years.length === 0) {
     figure.hidden = true;
@@ -349,6 +349,13 @@ function drawColumns(chart, years) {
     const cap = svg('rect', {
       class: `col-cap${isLatest ? ' latest' : ''}`, x, y, width: slot - gap, height: 2,
     });
+    if (animate) {
+      // Set as a style property (allowed by the policy, unlike a style
+      // attribute) so the columns print one after another.
+      const delay = `${Math.round(index * (600 / years.length))}ms`;
+      column.style.animationDelay = delay;
+      cap.style.animationDelay = delay;
+    }
     group.append(column, cap);
     if ((years.length - 1 - index) % labelEvery === 0) {
       const label = svg('text', {
@@ -400,12 +407,17 @@ function drawColumns(chart, years) {
 
   showReadout(readout, latest);
   body.replaceChildren(root);
+  if (animate) {
+    figure.classList.add('is-printing');
+    // Drop the class afterwards so a redraw (window resize) doesn't replay it.
+    setTimeout(() => figure.classList.remove('is-printing'), 1400);
+  }
 }
 
 // Charts that have been drawn, so they can be redrawn at a new width.
 const drawnCharts = [];
 function showColumns(chart, years) {
-  drawColumns(chart, years);
+  drawColumns(chart, years, { animate: true });
   drawnCharts.push({ chart, years });
 }
 
@@ -415,7 +427,7 @@ window.addEventListener('resize', () => {
   resizeTimer = setTimeout(() => {
     for (const { chart, years } of drawnCharts) {
       // A chart in a hidden panel has no width; it is redrawn when shown.
-      if (!chart.figure.closest('[hidden]')) drawColumns(chart, years);
+      if (!chart.figure.closest('[hidden]')) drawColumns(chart, years, { animate: false });
     }
   }, 150);
 });
@@ -541,7 +553,7 @@ function selectTab(tab) {
   } else {
     // A chart drawn while the window was a different size is redrawn to fit.
     for (const { chart, years } of drawnCharts) {
-      if ($(panelId).contains(chart.figure)) drawColumns(chart, years);
+      if ($(panelId).contains(chart.figure)) drawColumns(chart, years, { animate: false });
     }
   }
 }

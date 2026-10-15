@@ -231,6 +231,22 @@ h2, h3 { margin: 0; font-weight: 800; font-stretch: 80%; letter-spacing: 0; }
 .columns .year:focus { outline: none; }
 .columns .year:focus-visible .col-hit { stroke: var(--focus); stroke-width: 2; }
 
+/* The one authored moment: the columns are set from the baseline up, year
+   by year, as if the list were being printed. Each column's delay is set
+   from app.js. Already visible by default; only animates if allowed. */
+@media (prefers-reduced-motion: no-preference) {
+  .columns.is-printing .col,
+  .columns.is-printing .col-cap {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: print-column 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+@keyframes print-column {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+
 /* --- Forms -------------------------------------------------------------------- */
 
 .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 0; }
