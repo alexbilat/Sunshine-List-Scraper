@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-15T00:00:00Z",
+  "title": "Design System: Ontario Sunshine List",
+  "extensions": {
+    "colorMeta": {
+      "process-blue": { "role": "primary", "displayName": "Process Blue", "canonical": "#1f3a93", "cssVar": "--spot", "tonalRamp": ["#0c1840", "#142661", "#1f3a93", "#3552b0", "#5a74c6", "#829ad9", "#b0c0ea", "#dce3f7"] },
+      "spot-ink": { "role": "primary", "displayName": "Spot Ink", "canonical": "#ffffff", "cssVar": "--spot-ink" },
+      "newsprint": { "role": "neutral", "displayName": "Newsprint", "canonical": "#e6e6e3", "cssVar": "--paper", "tonalRamp": ["#232322", "#3d3d3a", "#5c5c58", "#8c8c88", "#b4b4af", "#d0d0cc", "#e6e6e3", "#efefec"] },
+      "newsprint-raised": { "role": "neutral", "displayName": "Newsprint Raised", "canonical": "#efefec", "cssVar": "--paper-raised" },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#161616", "cssVar": "--ink" },
+      "ink-soft": { "role": "neutral", "displayName": "Ink Soft", "canonical": "#3d3d3a", "cssVar": "--ink-soft" },
+      "rule-grey": { "role": "neutral", "displayName": "Rule Grey", "canonical": "#8c8c88", "cssVar": "--rule" },
+      "error-red": { "role": "error", "displayName": "Error Red", "canonical": "#a3221a", "cssVar": "--error", "tonalRamp": ["#3d0c09", "#6b1711", "#a3221a", "#c2402f", "#d9675a", "#e98f85", "#f4bab4", "#fbe3e0"] },
+      "night-paper": { "role": "neutral", "displayName": "Night Paper", "canonical": "#121212", "cssVar": "--paper (dark)" },
+      "night-paper-raised": { "role": "neutral", "displayName": "Night Paper Raised", "canonical": "#1c1c1b", "cssVar": "--paper-raised (dark)" },
+      "night-ink": { "role": "neutral", "displayName": "Night Ink", "canonical": "#e6e6e3", "cssVar": "--ink (dark)" },
+      "night-ink-soft": { "role": "neutral", "displayName": "Night Ink Soft", "canonical": "#b4b4af", "cssVar": "--ink-soft (dark)" },
+      "night-rule": { "role": "neutral", "displayName": "Night Rule", "canonical": "#5c5c58", "cssVar": "--rule (dark)" },
+      "night-blue": { "role": "primary", "displayName": "Night Blue", "canonical": "#9db1ff", "cssVar": "--spot (dark)" },
+      "night-error": { "role": "error", "displayName": "Night Error", "canonical": "#ff8a80", "cssVar": "--error (dark)" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The latest year's people count only, in process blue. One per page." },
+      "headline": { "displayName": "Headline", "purpose": "Panel headings on the list tabs." },
+      "wordmark": { "displayName": "Wordmark", "purpose": "Masthead title, uppercase." },
+      "title": { "displayName": "Title", "purpose": "Uppercase block heads over the overview tables." },
+      "figure": { "displayName": "Figure", "purpose": "Supporting facts under the display figure." },
+      "body": { "displayName": "Body", "purpose": "Prose, masthead source line, colophon." },
+      "data": { "displayName": "Data", "purpose": "Agate table cells; figures and names bold." },
+      "label": { "displayName": "Label", "purpose": "Tabs, status, chart caption, form labels; uppercase." },
+      "table-head": { "displayName": "Table head", "purpose": "Uppercase column headings over a 1px ink rule." }
+    },
+    "shadows": [],
+    "rules": [
+      { "name": "section-rule", "value": "2px solid var(--ink)", "purpose": "Under masthead, panel heads, block heads and the lead; over the colophon." },
+      { "name": "hairline-ink", "value": "1px solid var(--ink)", "purpose": "Under the tab bar and table headers; control borders; tab dividers." },
+      { "name": "row-rule", "value": "1px solid var(--rule)", "purpose": "Between agate table rows and between lead facts." },
+      { "name": "focus-ring", "value": "outline: 2px solid var(--focus); outline-offset: 2px", "purpose": "Every focusable element; inset -4px and paper-coloured on the selected ink tab." }
+    ],
+    "motion": [
+      { "name": "print-column", "value": "700ms cubic-bezier(0.16, 1, 0.3, 1), scaleY 0 to 1 from the baseline, staggered across 600ms", "purpose": "The one authored moment: year columns print upward on first draw. Only under prefers-reduced-motion: no-preference." },
+      { "name": "loading-blink", "value": "1s steps(2, start) infinite", "purpose": "The square loading indicator. Only when motion is allowed." }
+    ],
+    "breakpoints": [
+      { "name": "single-column", "value": "900px" },
+      { "name": "phone", "value": "600px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Tab",
+      "kind": "nav",
+      "refersTo": "tab",
+      "description": "Square uppercase tabs on a ruled bar; the selected tab is filled ink.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\">Overview</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Top salaries</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Years</button></div>",
+      "css": ".ds-tabs { display: flex; border-bottom: 1px solid var(--ink, #161616); } .ds-tab { min-height: 44px; padding: 10px 20px; border: 0; border-right: 1px solid var(--ink, #161616); background: none; color: var(--ink, #161616); font-family: Archivo, 'Arial Narrow', sans-serif; font-size: 0.95rem; font-weight: 700; font-stretch: 85%; text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; } .ds-tab:first-child { border-left: 1px solid var(--ink, #161616); } .ds-tab:hover { background: var(--paper-raised, #efefec); } .ds-tab[aria-selected=\"true\"] { background: var(--ink, #161616); color: var(--paper, #e6e6e3); } .ds-tab:focus-visible { outline: 2px solid var(--focus, #1f3a93); outline-offset: -4px; } .ds-tab[aria-selected=\"true\"]:focus-visible { outline-color: var(--paper, #e6e6e3); }"
+    },
+    {
+      "name": "Text Button",
+      "kind": "button",
+      "refersTo": "text-button",
+      "description": "An underlined process-blue action that jumps to another tab.",
+      "html": "<button class=\"ds-text-button\" type=\"button\">All top salaries</button>",
+      "css": ".ds-text-button { min-height: 44px; padding: 0; border: 0; background: none; color: var(--spot, #1f3a93); font-family: Archivo, 'Arial Narrow', sans-serif; font-size: 0.9rem; font-weight: 700; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.2em; cursor: pointer; } .ds-text-button:hover { color: var(--ink, #161616); } .ds-text-button:focus-visible { outline: 2px solid var(--focus, #1f3a93); outline-offset: 2px; }"
+    },
+    {
+      "name": "Select",
+      "kind": "input",
+      "refersTo": "select",
+      "description": "Square select with an uppercase label and a drawn chevron.",
+      "html": "<label class=\"ds-label\">Show<select class=\"ds-select\"><option>Top 10</option><option selected>Top 25</option></select></label>",
+      "css": ".ds-label { display: inline-flex; flex-direction: column; gap: 4px; font-family: Archivo, 'Arial Narrow', sans-serif; font-size: 0.8rem; font-weight: 700; font-stretch: 85%; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink, #161616); } .ds-select { min-height: 44px; min-width: 8.5rem; padding: 8px 36px 8px 12px; border: 1px solid var(--ink, #161616); border-radius: 0; background: var(--paper, #e6e6e3) url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23161616' stroke-width='2'/%3E%3C/svg%3E\") no-repeat right 12px center; color: var(--ink, #161616); font: inherit; font-size: 1rem; font-weight: 600; text-transform: none; letter-spacing: 0; appearance: none; cursor: pointer; } .ds-select:hover { background-color: var(--paper-raised, #efefec); } .ds-select:focus-visible { outline: 2px solid var(--focus, #1f3a93); outline-offset: 2px; }"
+    },
+    {
+      "name": "Agate Table",
+      "kind": "custom",
+      "refersTo": "agate-cell",
+      "description": "Dense ruled table; figures bold, tabular and hard right; latest-year row in process blue.",
+      "html": "<table class=\"ds-agate\"><thead><tr><th class=\"ds-num ds-rank\">#</th><th>Name</th><th>Employer</th><th class=\"ds-num\">Salary paid</th></tr></thead><tbody><tr><td class=\"ds-num ds-rank\">1</td><td class=\"ds-name\">Kenneth Hartwick</td><td class=\"ds-soft\">Ontario Power Generation</td><td class=\"ds-num\">$1,907,408.69</td></tr><tr><td class=\"ds-num ds-rank\">2</td><td class=\"ds-name\">Nicolle Butcher</td><td class=\"ds-soft\">Ontario Power Generation</td><td class=\"ds-num\">$1,596,218.20</td></tr></tbody></table>",
+      "css": ".ds-agate { width: 100%; border-collapse: collapse; font-family: Archivo, 'Arial Narrow', sans-serif; font-size: 0.9375rem; font-stretch: 85%; line-height: 1.2; font-variant-numeric: tabular-nums; color: var(--ink, #161616); } .ds-agate th { padding: 8px 12px 6px 0; border-bottom: 1px solid var(--ink, #161616); font-size: 0.75rem; font-weight: 700; text-align: left; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; } .ds-agate td { padding: 5px 16px 5px 0; border-bottom: 1px solid var(--rule, #8c8c88); vertical-align: baseline; } .ds-agate th:last-child, .ds-agate td:last-child { padding-right: 0; } .ds-agate tbody tr:hover { background: var(--paper-raised, #efefec); } .ds-agate .ds-num { text-align: right; white-space: nowrap; } .ds-agate td.ds-num { font-weight: 700; } .ds-agate .ds-rank { width: 3ch; color: var(--ink-soft, #3d3d3a); } .ds-agate td.ds-rank { font-weight: 400; } .ds-agate .ds-name { font-weight: 700; } .ds-agate .ds-soft { color: var(--ink-soft, #3d3d3a); }"
+    },
+    {
+      "name": "Year Columns",
+      "kind": "custom",
+      "refersTo": "year-columns",
+      "description": "Signature chart: one column of ruled 1px agate lines per year, solid 2px cap, latest year in process blue.",
+      "html": "<svg class=\"ds-columns\" viewBox=\"0 0 120 80\" width=\"240\" height=\"160\"><defs><pattern id=\"ds-ink\" width=\"4\" height=\"3\" patternUnits=\"userSpaceOnUse\"><rect class=\"ds-agate-ink\" width=\"4\" height=\"1\"/></pattern><pattern id=\"ds-spot\" width=\"4\" height=\"3\" patternUnits=\"userSpaceOnUse\"><rect class=\"ds-agate-spot\" width=\"4\" height=\"1\"/></pattern></defs><rect x=\"2\" y=\"60\" width=\"20\" height=\"10\" fill=\"url(#ds-ink)\"/><rect class=\"ds-cap\" x=\"2\" y=\"60\" width=\"20\" height=\"2\"/><rect x=\"26\" y=\"48\" width=\"20\" height=\"22\" fill=\"url(#ds-ink)\"/><rect class=\"ds-cap\" x=\"26\" y=\"48\" width=\"20\" height=\"2\"/><rect x=\"50\" y=\"34\" width=\"20\" height=\"36\" fill=\"url(#ds-ink)\"/><rect class=\"ds-cap\" x=\"50\" y=\"34\" width=\"20\" height=\"2\"/><rect x=\"74\" y=\"20\" width=\"20\" height=\"50\" fill=\"url(#ds-ink)\"/><rect class=\"ds-cap\" x=\"74\" y=\"20\" width=\"20\" height=\"2\"/><rect x=\"98\" y=\"4\" width=\"20\" height=\"66\" fill=\"url(#ds-spot)\"/><rect class=\"ds-cap ds-latest\" x=\"98\" y=\"4\" width=\"20\" height=\"2\"/><line class=\"ds-baseline\" x1=\"0\" x2=\"120\" y1=\"70\" y2=\"70\"/><text class=\"ds-label\" x=\"12\" y=\"79\" text-anchor=\"middle\">’21</text><text class=\"ds-label ds-latest\" x=\"108\" y=\"79\" text-anchor=\"middle\">’25</text></svg>",
+      "css": ".ds-columns { display: block; background: var(--paper, #e6e6e3); } .ds-columns .ds-agate-ink, .ds-columns .ds-cap { fill: var(--column, #161616); } .ds-columns .ds-agate-spot, .ds-columns .ds-cap.ds-latest { fill: var(--spot, #1f3a93); } .ds-columns .ds-baseline { stroke: var(--ink, #161616); stroke-width: 1; } .ds-columns .ds-label { fill: var(--ink, #161616); font: 600 6px Archivo, 'Arial Narrow', sans-serif; } .ds-columns .ds-label.ds-latest { fill: var(--spot, #1f3a93); font-weight: 800; }"
+    },
+    {
+      "name": "Health Status",
+      "kind": "chip",
+      "refersTo": "label",
+      "description": "Uppercase status with an 8px square dot: rule grey checking, ink ok, error red failed.",
+      "html": "<p class=\"ds-health\" data-state=\"ok\"><span class=\"ds-dot\"></span>Data updated October 15, 2026</p>",
+      "css": ".ds-health { margin: 0; display: inline-flex; align-items: center; gap: 8px; font-family: Archivo, 'Arial Narrow', sans-serif; font-size: 0.875rem; font-weight: 600; font-stretch: 85%; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink, #161616); } .ds-dot { width: 8px; height: 8px; background: var(--rule, #8c8c88); } .ds-health[data-state=\"ok\"] .ds-dot { background: var(--ink, #161616); } .ds-health[data-state=\"error\"] { color: var(--error, #a3221a); } .ds-health[data-state=\"error\"] .ds-dot { background: var(--error, #a3221a); }"
+    },
+    {
+      "name": "Error Message",
+      "kind": "card",
+      "refersTo": "error-message",
+      "description": "Square error-red outline with error-red text.",
+      "html": "<p class=\"ds-error\">The list could not be loaded. Try again in a moment.</p>",
+      "css": ".ds-error { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--error, #a3221a); color: var(--error, #a3221a); font-family: Archivo, 'Arial Narrow', sans-serif; font-weight: 600; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Agate Column",
+    "overview": "The list is presented the way Ontarians have always met it: in the newspaper's agate tables. A newsprint-grey page, pure ink, one process-blue spot, a single condensed grotesque, square corners and thin rules. Everything is dense, exact and columnar; figures are tabular and set hard against the right edge of their column so a reader can run a finger down them.\n\nHierarchy comes from width and weight of one typeface, and from the weight of rules, never from boxes, cards, shadows or tints. One figure owns the first viewport (the latest year's people count, at display scale in the spot colour), and the signature chart draws each year as a printed column of ruled agate lines whose height is the length of that year's list. The page reads as a printed record you can trust, credited to Ontario, not as a civic dashboard.\n\nDark mode is the same page printed in reverse: the paper goes near-black, ink goes newsprint, and the spot lightens to stay legible. Every role swaps through the same custom properties.",
+    "keyCharacteristics": [
+      "One self-hosted variable face (Archivo, width axis 62% to 125%) for display, labels and data.",
+      "Tabular numerals everywhere; figures right-aligned, bold, nowrap.",
+      "Zero radius. 1px rules between rows, 2px ink rules under masthead and section heads.",
+      "Selected states are printed marks: filled with ink.",
+      "One spot colour, process blue, for the latest year, links-as-actions and text selection.",
+      "Flat. No shadows, no gradients, no tinted panels."
+    ],
+    "rules": [
+      { "name": "The One Spot Rule", "body": "Process blue marks the latest year and the reader's own action (selection, focus, the text-button actions). It is never a fill for panels, never a second chart series, never decoration.", "section": "colors" },
+      { "name": "The Grey Is Data Rule", "body": "Grey appears only as data (secondary columns, rules between rows, chart rules). No grey backgrounds, captions-as-decoration or muted ornament.", "section": "colors" },
+      { "name": "The One Family Rule", "body": "Every role is Archivo; contrast comes from the width axis and weight, not a second face.", "section": "typography" },
+      { "name": "The Tabular Rule", "body": "`font-variant-numeric: tabular-nums` is set on the body and never turned off; every figure is right-aligned and `nowrap` in its column.", "section": "typography" },
+      { "name": "The Rules Not Boxes Rule", "body": "Structure is drawn with horizontal rules of two weights (1px, 2px). No cards, no bordered panels, no shadows.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do set every figure in tabular numerals, right-aligned, bold and nowrap.",
+      "Do mark selection with a solid ink fill and the latest year with process blue.",
+      "Do separate sections with a 2px ink rule and rows with a 1px rule-grey rule.",
+      "Do get hierarchy from Archivo's width axis and weight (display at width 62%, labels and data at 85%, prose at 100%).",
+      "Do keep every interactive control at least 44px tall.",
+      "Do route every colour through the custom properties so dark mode stays a single swap."
+    ],
+    "donts": [
+      "Don't add a second accent colour or use process blue as a fill for panels or a decorative series.",
+      "Don't use grey for decoration; grey is data and rules only.",
+      "Don't round corners, add shadows, or wrap content in cards or tinted boxes.",
+      "Don't introduce a second typeface or load fonts from a CDN; the one self-hosted Archivo file covers every role.",
+      "Don't build KPI tiles or a line chart for growth; the year columns are the chart."
+    ]
+  }
+}
