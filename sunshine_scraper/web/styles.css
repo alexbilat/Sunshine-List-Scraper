@@ -138,6 +138,37 @@ main,
 .health[data-state="error"] { color: var(--error); }
 .health[data-state="error"] .dot { background: var(--error); }
 
+/* --- Tabs --------------------------------------------------------------------- */
+/* Selected state is a printed mark: the tab is filled with ink. */
+
+.tabs { border-bottom: 1px solid var(--ink); }
+.tabs-inner {
+  display: flex;
+  overflow-x: auto;           /* four tabs never wrap; they scroll on tiny screens */
+  scrollbar-width: none;
+}
+.tabs button {
+  flex: none;
+  min-height: 44px;
+  padding: 10px 20px;
+  border: 0;
+  border-right: 1px solid var(--ink);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-stretch: 85%;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.tabs button:first-child { border-left: 1px solid var(--ink); }
+.tabs button:hover { background: var(--paper-raised); }
+.tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.tabs button:focus-visible { outline-offset: -4px; outline-color: var(--paper); }
+.tabs button[aria-selected="false"]:focus-visible { outline-color: var(--focus); }
+
 /* Temporary: the old colour names, still used by the rules that have not
    been restyled yet. Removed once nothing refers to them. */
 :root {
@@ -157,27 +188,6 @@ main,
 /* Temporary: keep the old centred column until the page sections have
    their own containers. */
 body { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
-
-/* Tabs */
-.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border); }
-.tabs button {
-  border: 1px solid transparent;
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
-  padding: 10px 16px;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  cursor: pointer;
-}
-.tabs button:hover { color: var(--text); }
-.tabs button[aria-selected="true"] {
-  background: var(--surface);
-  border-color: var(--border);
-  color: var(--text);
-  font-weight: 600;
-  margin-bottom: -1px; /* sit on top of the border line */
-}
 
 .panel {
   background: var(--surface);
@@ -242,9 +252,3 @@ tbody tr:nth-child(even) { background: var(--row-alt); }
 .chart .label { fill: var(--muted); font-size: 12px; }
 
 footer { margin-top: 32px; font-size: 0.85rem; color: var(--muted); }
-
-@media (max-width: 600px) {
-  h1 { font-size: 1.4rem; }
-  .panel { padding: 16px 12px; }
-  .tabs button { padding: 8px 10px; }
-}

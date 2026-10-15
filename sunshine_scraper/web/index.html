@@ -36,10 +36,12 @@
 
   <!-- Tabs: one panel visible at a time. Buttons (not links) because they
        switch views on this page rather than going somewhere new. -->
-  <nav class="tabs" role="tablist" aria-label="Views">
-    <button type="button" role="tab" id="tab-salaries" aria-controls="panel-salaries" aria-selected="true">Top salaries</button>
-    <button type="button" role="tab" id="tab-years" aria-controls="panel-years" aria-selected="false">Years overview</button>
-    <button type="button" role="tab" id="tab-titles" aria-controls="panel-titles" aria-selected="false">Common job titles</button>
+  <nav class="tabs" aria-label="Views">
+    <div class="tabs-inner" role="tablist">
+      <button type="button" role="tab" id="tab-salaries" aria-controls="panel-salaries" aria-selected="true">Top salaries</button>
+      <button type="button" role="tab" id="tab-years" aria-controls="panel-years" aria-selected="false">Years</button>
+      <button type="button" role="tab" id="tab-titles" aria-controls="panel-titles" aria-selected="false">Job titles</button>
+    </div>
   </nav>
 
   <main id="main">
