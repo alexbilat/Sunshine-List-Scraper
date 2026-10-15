@@ -82,9 +82,12 @@
         <h2>People listed and average salary by year</h2>
       </div>
       <p class="message" id="years-message" role="status" aria-live="polite"></p>
-      <figure class="chart" id="years-chart" hidden>
-        <figcaption>People on the list each year</figcaption>
-        <div id="years-chart-body"></div>
+      <figure class="columns columns-wide" id="years-chart" hidden>
+        <figcaption>
+          <span>People on the list each year</span>
+          <output class="readout" id="years-readout" aria-live="polite"></output>
+        </figcaption>
+        <div class="columns-body" id="years-chart-body"></div>
       </figure>
       <div class="table-wrap">
         <table id="years-table" class="agate" hidden>

@@ -187,6 +187,50 @@ h2, h3 { margin: 0; font-weight: 800; font-stretch: 80%; letter-spacing: 0; }
 }
 .panel-head h2 { font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.25rem); line-height: 1.05; }
 
+/* --- The year columns (signature) --------------------------------------------- */
+/* One column per year, filled with ruled lines like a column of agate type,
+   so its height reads as the printed length of that year's list. */
+
+.columns { margin: 0; min-width: 0; }
+.columns figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 16px;
+  padding-bottom: 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-stretch: 85%;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.readout {
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+.readout strong { color: var(--ink); font-weight: 800; }
+.columns-body svg { display: block; width: 100%; height: auto; overflow: visible; }
+.columns-wide { margin-bottom: 32px; }
+
+.columns .year { cursor: pointer; }
+.columns .col-hit { fill: transparent; }
+.columns .agate-ink { fill: var(--column); }
+.columns .agate-spot { fill: var(--spot); }
+.columns .col-cap { fill: var(--column); }
+.columns .col-cap.latest { fill: var(--spot); }
+.columns .baseline { stroke: var(--ink); stroke-width: 1; }
+.columns .label { fill: var(--ink); font: 600 11px var(--font); font-stretch: 85%; }
+.columns .label.latest { fill: var(--spot); font-weight: 800; }
+
+/* The column under the pointer or keyboard focus fills solid. */
+.columns .year.is-active .col { fill: var(--column); }
+.columns .year.is-active .col.latest { fill: var(--spot); }
+.columns .year:focus { outline: none; }
+.columns .year:focus-visible .col-hit { stroke: var(--focus); stroke-width: 2; }
+
 /* --- Forms -------------------------------------------------------------------- */
 
 .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 0; }
@@ -312,28 +356,3 @@ table.agate {
   font-size: 0.875rem;
 }
 .colophon p { margin: 0; }
-
-/* Temporary: the old colour names, still used by the rules that have not
-   been restyled yet. Removed once nothing refers to them. */
-:root {
-  --bg: var(--paper);
-  --surface: var(--paper);
-  --text: var(--ink);
-  --muted: var(--ink-soft);
-  --border: var(--rule);
-  --accent: var(--spot);
-  --accent-text: var(--spot-ink);
-  --bar: var(--column);
-  --ok: #1f6b3a;
-  --error-bg: transparent;
-  --row-alt: var(--paper-raised);
-}
-
-/* Chart */
-.chart { margin: 0 0 20px; }
-.chart figcaption { font-size: 0.9rem; color: var(--muted); margin-bottom: 4px; }
-.chart svg { width: 100%; height: auto; display: block; }
-.chart .bar { fill: var(--bar); }
-.chart .bar:hover { opacity: 0.8; }
-.chart .axis { stroke: var(--border); }
-.chart .label { fill: var(--muted); font-size: 12px; }

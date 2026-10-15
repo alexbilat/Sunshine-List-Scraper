@@ -256,8 +256,173 @@ function loadYears() {
 const listedYears = (years) =>
   years.filter((year) => year.people > 0).sort((a, b) => a.year - b.year);
 
+// --- The year columns chart ---------------------------------------------------
+// One column per year, filled with thin ruled lines like a column of small
+// newspaper type, so each column's height reads as the length of that year's
+// list. Drawn as SVG with DOM calls rather than a chart library: the page
+// then needs no third-party script, which keeps the security policy strict.
+// Colours come from styles.css so dark mode works.
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function svg(name, attributes = {}) {
+  const node = document.createElementNS(SVG_NS, name);
+  for (const [key, value] of Object.entries(attributes)) {
+    node.setAttribute(key, String(value));
+  }
+  return node;
+}
+
+// What the readout line says about one year.
+function describeYear(year) {
+  return [`${year.year}: `, wholeNumber.format(year.people),
+    ` people listed, average ${formatCents(year.average_salary_cents)}`];
+}
+
+function showReadout(readout, year) {
+  const [before, figure, after] = describeYear(year);
+  readout.replaceChildren(before, element('strong', '', figure), after);
+}
+
+// Draw (or redraw) a columns chart.
+// chart: { figure, body, readout, idPrefix, onPick } and the years to show.
+// The drawing is sized to the box it sits in, in real pixels, so the ruled
+// lines stay one pixel thin on every screen instead of being scaled.
+function drawColumns(chart, years) {
+  const { figure, body, readout, idPrefix, onPick } = chart;
+  if (years.length === 0) {
+    figure.hidden = true;
+    return;
+  }
+  figure.hidden = false;
+
+  const width = Math.max(280, Math.round(body.clientWidth));
+  const height = Math.round(Math.min(320, Math.max(200, width * 0.42)));
+  const labelSpace = 22;
+  const plotHeight = height - labelSpace;
+  const slot = width / years.length;
+  const gap = Math.max(1, Math.min(6, slot * 0.22));
+  const maxPeople = Math.max(...years.map((year) => year.people), 1);
+  // Wide columns get every year, shortened to two digits ("\u201996") the way
+  // a newspaper table would; narrow ones get every few full years. Counting
+  // back from the latest year keeps the gaps even right up to the newest one.
+  const shortLabels = slot >= 16;
+  const labelEvery = shortLabels ? 1 : Math.ceil(44 / slot);
+  const latest = years[years.length - 1];
+
+  const root = svg('svg', {
+    viewBox: `0 0 ${width} ${height}`,
+    width, height,
+    role: 'group',
+    'aria-label': 'One column per year; taller means more people listed. '
+      + 'Use the arrow keys to move between years and Enter to see that year\u2019s top salaries.',
+  });
+
+  // The two fills: ink lines and spot-colour lines, three pixels apart.
+  const defs = svg('defs');
+  for (const [suffix, className] of [['ink', 'agate-ink'], ['spot', 'agate-spot']]) {
+    const pattern = svg('pattern', {
+      id: `${idPrefix}-${suffix}`, width: 4, height: 3, patternUnits: 'userSpaceOnUse',
+    });
+    pattern.append(svg('rect', { class: className, width: 4, height: 1 }));
+    defs.append(pattern);
+  }
+  root.append(defs);
+
+  const groups = years.map((year, index) => {
+    const isLatest = year === latest;
+    const columnHeight = Math.max(2, (year.people / maxPeople) * (plotHeight - 4));
+    const x = index * slot + gap / 2;
+    const y = plotHeight - columnHeight;
+    const group = svg('g', {
+      class: 'year', role: 'button', tabindex: isLatest ? 0 : -1,
+      'aria-label': `${describeYear(year).join('')}. Show top salaries for ${year.year}.`,
+    });
+    // An invisible full-height target so short early columns are easy to hit.
+    group.append(svg('rect', {
+      class: 'col-hit', x: index * slot, y: 0, width: slot, height: plotHeight,
+    }));
+    const column = svg('rect', {
+      class: `col${isLatest ? ' latest' : ''}`, x, y, width: slot - gap, height: columnHeight,
+      fill: `url(#${idPrefix}-${isLatest ? 'spot' : 'ink'})`,
+    });
+    // A solid head on each column, like the rule over a column of type.
+    const cap = svg('rect', {
+      class: `col-cap${isLatest ? ' latest' : ''}`, x, y, width: slot - gap, height: 2,
+    });
+    group.append(column, cap);
+    if ((years.length - 1 - index) % labelEvery === 0) {
+      const label = svg('text', {
+        class: `label${isLatest ? ' latest' : ''}`,
+        x: index * slot + slot / 2, y: height - 6, 'text-anchor': 'middle',
+      });
+      label.textContent = shortLabels ? `\u2019${String(year.year).slice(-2)}` : String(year.year);
+      group.append(label);
+    }
+    root.append(group);
+    return group;
+  });
+  root.append(svg('line', { class: 'baseline', x1: 0, x2: width, y1: plotHeight, y2: plotHeight }));
+
+  // Pointer and keyboard both move one "active" column; the readout follows.
+  let active = groups.length - 1;
+  const activate = (index) => {
+    groups[active].classList.remove('is-active');
+    active = index;
+    groups[active].classList.add('is-active');
+    showReadout(readout, years[active]);
+  };
+  const rest = () => {
+    groups[active].classList.remove('is-active');
+    showReadout(readout, latest);
+  };
+  groups.forEach((group, index) => {
+    group.addEventListener('pointerenter', () => activate(index));
+    group.addEventListener('focus', () => activate(index));
+    group.addEventListener('click', () => onPick(years[index].year));
+    group.addEventListener('keydown', (event) => {
+      const step = { ArrowRight: 1, ArrowLeft: -1, Home: -Infinity, End: Infinity }[event.key];
+      if (step !== undefined) {
+        event.preventDefault();
+        const next = Math.min(groups.length - 1, Math.max(0, index + step));
+        group.tabIndex = -1;
+        groups[next].tabIndex = 0;
+        groups[next].focus();
+      } else if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onPick(years[index].year);
+      }
+    });
+  });
+  root.addEventListener('pointerleave', rest);
+  root.addEventListener('focusout', (event) => {
+    if (!root.contains(event.relatedTarget)) rest();
+  });
+
+  showReadout(readout, latest);
+  body.replaceChildren(root);
+}
+
+// Charts that have been drawn, so they can be redrawn at a new width.
+const drawnCharts = [];
+function showColumns(chart, years) {
+  drawColumns(chart, years);
+  drawnCharts.push({ chart, years });
+}
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    for (const { chart, years } of drawnCharts) {
+      // A chart in a hidden panel has no width; it is redrawn when shown.
+      if (!chart.figure.closest('[hidden]')) drawColumns(chart, years);
+    }
+  }, 150);
+});
+
 // --- Panel: top salaries ------------------------------------------------------
 
+// Filled once, when the years first arrive; later visits just show the panel.
 async function setUpSalaries() {
   const select = $('salaries-year');
   const message = $('salaries-message');
@@ -269,7 +434,10 @@ async function setUpSalaries() {
       showMessage(message, 'The database has no salary records yet. Run the scraper first.');
       return;
     }
+    // A year picked from a chart before the years arrived wins.
+    const wanted = pendingYear ?? available[0];
     select.replaceChildren(...available.map((year) => new Option(String(year), String(year))));
+    select.value = String(wanted);
     select.disabled = false;
     showTopSalaries();
   } catch (error) {
@@ -294,6 +462,22 @@ function showTopSalaries() {
   });
 }
 
+// Open the top salaries panel on one year (used by the chart columns).
+let pendingYear = null;
+function openYear(year) {
+  const select = $('salaries-year');
+  selectTab($('tab-salaries'));
+  if (select.disabled) {
+    pendingYear = year; // the picker isn't filled yet; setUpSalaries uses it
+    return;
+  }
+  if (select.value !== String(year)) {
+    select.value = String(year);
+    showTopSalaries();
+  }
+  $('tab-salaries').focus();
+}
+
 // --- Panel: years -------------------------------------------------------------
 
 async function showYears() {
@@ -307,76 +491,17 @@ async function showYears() {
       { text: wholeNumber.format(year.people), className: 'num' },
       { text: formatCents(year.average_salary_cents), className: 'num' },
     ], year.year === latestYear ? 'latest' : '')));
-    drawYearsChart(years);
+    showColumns({
+      figure: $('years-chart'),
+      body: $('years-chart-body'),
+      readout: $('years-readout'),
+      idPrefix: 'years',
+      onPick: openYear,
+    }, years);
     showMessage(message, years.length ? '' : 'The database has no salary records yet.');
   } catch (error) {
     showMessage(message, error.message, 'error');
   }
-}
-
-// A simple bar chart of people per year, drawn as SVG.
-// Built with DOM calls rather than a chart library: the page then needs no
-// third-party script, which keeps the security policy strict ("only scripts
-// from this server"). Colours come from styles.css so dark mode works.
-function drawYearsChart(years) {
-  const figure = $('years-chart');
-  const body = $('years-chart-body');
-  if (years.length === 0) {
-    figure.hidden = true;
-    return;
-  }
-  const NS = 'http://www.w3.org/2000/svg';
-  const make = (name, attributes) => {
-    const element = document.createElementNS(NS, name);
-    for (const [key, value] of Object.entries(attributes)) {
-      element.setAttribute(key, String(value));
-    }
-    return element;
-  };
-
-  // Drawing units, not pixels: the viewBox scales the whole chart to fit the
-  // available width, so it works on a phone and on a wide screen.
-  const width = 720;
-  const height = 260;
-  const top = 12;
-  const bottom = 28; // room for year labels
-  const left = 8;
-  const plotHeight = height - top - bottom;
-  const slot = (width - left * 2) / years.length;
-  const barWidth = Math.max(2, slot * 0.7);
-  const maxPeople = Math.max(...years.map((year) => year.people), 1);
-  // With many years, label only every few so the labels don't overlap.
-  const labelEvery = Math.ceil(years.length / 12);
-
-  const svg = make('svg', {
-    viewBox: `0 0 ${width} ${height}`,
-    role: 'img',
-    'aria-label': 'Bar chart of people listed per year. The table below has the exact numbers.',
-  });
-  svg.append(make('line', {
-    class: 'axis', x1: left, x2: width - left, y1: top + plotHeight, y2: top + plotHeight,
-  }));
-  years.forEach((year, index) => {
-    const barHeight = (year.people / maxPeople) * plotHeight;
-    const x = left + index * slot + (slot - barWidth) / 2;
-    const bar = make('rect', {
-      class: 'bar', x, y: top + plotHeight - barHeight, width: barWidth, height: barHeight, rx: 2,
-    });
-    // <title> gives a hover tooltip with the exact value.
-    const tooltip = make('title', {});
-    tooltip.textContent = `${year.year}: ${wholeNumber.format(year.people)} people`;
-    bar.append(tooltip);
-    svg.append(bar);
-    if (index % labelEvery === 0 || index === years.length - 1) {
-      const label = make('text', {
-        class: 'label', x: left + index * slot + slot / 2, y: height - 8, 'text-anchor': 'middle',
-      });
-      label.textContent = String(year.year);
-      svg.append(label);
-    }
-  });
-  body.replaceChildren(svg);
-  figure.hidden = false;
 }
 
 // --- Panel: common job titles -------------------------------------------------
@@ -413,6 +538,11 @@ function selectTab(tab) {
   if (panelLoaders[panelId] && !loadedPanels.has(panelId)) {
     loadedPanels.add(panelId);
     panelLoaders[panelId]();
+  } else {
+    // A chart drawn while the window was a different size is redrawn to fit.
+    for (const { chart, years } of drawnCharts) {
+      if ($(panelId).contains(chart.figure)) drawColumns(chart, years);
+    }
   }
 }
 
