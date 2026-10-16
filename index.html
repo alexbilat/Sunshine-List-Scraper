@@ -1,0 +1,200 @@
+<!doctype html>
+<!--
+  The Sunshine List web page. It is plain HTML: all data is loaded afterwards
+  by app.js, either from the read-only API on this same server (/api/...) or,
+  on the public static site, from pre-built JSON files (see data-source below).
+  No inline scripts or styles, so the strict Content-Security-Policy can
+  forbid them entirely.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Where app.js gets data: "api" = the live server on this PC;
+       publish_site.py changes it to "static" for the public site. -->
+  <meta name="data-source" content="static">
+  <!-- The same policy the local server sends as a header, repeated here
+       because static hosts such as GitHub Pages can't set custom headers. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="description" content="Every Ontario public sector salary of $100,000 or more disclosed since 1996, from Ontario's official Public Sector Salary Disclosure.">
+  <meta name="color-scheme" content="light dark">
+  <title>Ontario Sunshine List</title>
+  <!-- Preloading the one font file means the big figures don't flash in a
+       fallback face first. It comes from this server, so the policy allows it. -->
+  <link rel="preload" href="fonts/archivo-latin-wdth.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the data</a>
+
+  <header class="masthead">
+    <div class="masthead-inner">
+      <h1 class="wordmark">Ontario Sunshine List</h1>
+      <p class="health" id="health" role="status">
+        <span class="dot" aria-hidden="true"></span><span id="health-text">Checking&hellip;</span>
+      </p>
+      <p class="masthead-source">Public sector salaries of $100,000 or more, from
+        <a href="https://www.ontario.ca/page/public-sector-salary-disclosure" rel="noopener noreferrer">Ontario's Public Sector Salary Disclosure</a>.</p>
+    </div>
+  </header>
+
+  <!-- Tabs: one panel visible at a time. Buttons (not links) because they
+       switch views on this page rather than going somewhere new. -->
+  <nav class="tabs" aria-label="Views">
+    <div class="tabs-inner" role="tablist">
+      <button type="button" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="true">Overview</button>
+      <button type="button" role="tab" id="tab-salaries" aria-controls="panel-salaries" aria-selected="false">Top salaries</button>
+      <button type="button" role="tab" id="tab-years" aria-controls="panel-years" aria-selected="false">Years</button>
+      <button type="button" role="tab" id="tab-titles" aria-controls="panel-titles" aria-selected="false">Job titles</button>
+    </div>
+  </nav>
+
+  <main id="main">
+    <!-- Overview: the at-a-glance answers, built from the same three data
+         sources as the other tabs (years, top salaries, top titles). -->
+    <section class="panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
+      <div class="lead">
+        <div class="lead-text">
+          <h2 class="headline" id="headline">
+            <span class="figure" id="headline-people">&nbsp;</span>
+            <span class="headline-words" id="headline-words">people paid $100,000 or more</span>
+          </h2>
+          <p class="lead-facts" id="lead-facts" hidden>
+            <span><span>Average salary listed</span> <strong id="fact-average"></strong></span>
+            <span><span>People listed in <span id="fact-first-year"></span></span> <strong id="fact-first-people"></strong></span>
+          </p>
+          <p class="message" id="overview-message" role="status" aria-live="polite"></p>
+        </div>
+        <figure class="columns" id="overview-chart" hidden>
+          <figcaption>
+            <span>Length of the list each year</span>
+            <!-- Updated as the pointer or keyboard moves across the columns. -->
+            <output class="readout" id="overview-readout" aria-live="polite"></output>
+          </figcaption>
+          <div class="columns-body" id="overview-chart-body"></div>
+        </figure>
+      </div>
+
+      <div class="digest">
+        <section class="digest-block" aria-labelledby="digest-salaries-heading">
+          <div class="block-head">
+            <h3 id="digest-salaries-heading">Highest paid<span id="digest-salaries-year"></span></h3>
+            <button type="button" class="text-button" data-open-tab="tab-salaries">All top salaries</button>
+          </div>
+          <p class="message" id="digest-salaries-message" role="status" aria-live="polite"></p>
+          <div class="table-wrap">
+            <table id="digest-salaries-table" class="agate" hidden>
+              <thead>
+                <tr><th scope="col" class="num rank">#</th><th scope="col">Name</th><th scope="col" class="employer-col">Employer</th><th scope="col" class="num">Salary paid</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="digest-block" aria-labelledby="digest-titles-heading">
+          <div class="block-head">
+            <h3 id="digest-titles-heading">Most listed job titles<span id="digest-titles-years"></span></h3>
+            <button type="button" class="text-button" data-open-tab="tab-titles">All job titles</button>
+          </div>
+          <p class="message" id="digest-titles-message" role="status" aria-live="polite"></p>
+          <div class="table-wrap">
+            <table id="digest-titles-table" class="agate" hidden>
+              <thead>
+                <tr><th scope="col" class="num rank">#</th><th scope="col">Job title</th><th scope="col" class="num">Times listed</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-salaries" role="tabpanel" aria-labelledby="tab-salaries" hidden>
+      <div class="panel-head">
+        <h2>Highest salaries in a year</h2>
+        <!-- The lists update as soon as a choice changes; the form exists so
+             the controls are grouped and labelled together. -->
+        <form class="controls" id="salaries-form">
+          <label>Year
+            <select id="salaries-year" name="year" required disabled>
+              <option>Loading&hellip;</option>
+            </select>
+          </label>
+          <label>Show
+            <select id="salaries-limit" name="limit">
+              <option value="10">Top 10</option>
+              <option value="25" selected>Top 25</option>
+              <option value="50">Top 50</option>
+              <option value="100">Top 100</option>
+            </select>
+          </label>
+        </form>
+      </div>
+      <p class="message" id="salaries-message" role="status" aria-live="polite"></p>
+      <div class="table-wrap">
+        <table id="salaries-table" class="agate" hidden>
+          <thead>
+            <tr><th scope="col" class="num rank">#</th><th scope="col">Name</th><th scope="col" class="employer-col">Employer</th><th scope="col" class="num">Salary paid</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-years" role="tabpanel" aria-labelledby="tab-years" hidden>
+      <div class="panel-head">
+        <h2>People listed and average salary by year</h2>
+      </div>
+      <p class="message" id="years-message" role="status" aria-live="polite"></p>
+      <figure class="columns columns-wide" id="years-chart" hidden>
+        <figcaption>
+          <span>People on the list each year</span>
+          <output class="readout" id="years-readout" aria-live="polite"></output>
+        </figcaption>
+        <div class="columns-body" id="years-chart-body"></div>
+      </figure>
+      <div class="table-wrap">
+        <table id="years-table" class="agate" hidden>
+          <thead>
+            <tr><th scope="col">Year</th><th scope="col" class="num">People listed</th><th scope="col" class="num">Average salary</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-titles" role="tabpanel" aria-labelledby="tab-titles" hidden>
+      <div class="panel-head">
+        <h2>Most common job titles, all years</h2>
+        <form class="controls" id="titles-form">
+          <label>Show
+            <select id="titles-limit" name="limit">
+              <option value="10">Top 10</option>
+              <option value="25" selected>Top 25</option>
+              <option value="50">Top 50</option>
+              <option value="100">Top 100</option>
+            </select>
+          </label>
+        </form>
+      </div>
+      <p class="message" id="titles-message" role="status" aria-live="polite"></p>
+      <div class="table-wrap">
+        <table id="titles-table" class="agate" hidden>
+          <thead>
+            <tr><th scope="col" class="num rank">#</th><th scope="col">Job title</th><th scope="col" class="num">Times listed</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="colophon">
+    <div class="colophon-inner">
+      <p>Source: <a href="https://www.ontario.ca/page/public-sector-salary-disclosure" rel="noopener noreferrer">Ontario Public Sector Salary Disclosure</a>. Salaries are shown exactly as disclosed, to the cent.</p>
+      <p id="api-docs-link">Developers: <a href="/docs">API documentation</a>.</p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,506 @@
+/* Styles for the Sunshine List page.
+
+   The look borrows from the way Ontarians have always met the list: the
+   newspaper's agate tables. That means a newsprint-grey page, pure ink, one
+   blue spot colour, a single condensed typeface, square corners and thin
+   rules. Grey is only ever used for data, never for decoration.
+
+   Colours are variables so dark mode only has to change them in one place. */
+
+/* One self-hosted font file (Archivo, SIL Open Font License, see
+   fonts/OFL.txt). It is a variable font with a width axis, so the same file
+   gives both the condensed "agate" figures and the normal-width body text.
+   It is served from this site, which the security policy allows. */
+@font-face {
+  font-family: "Archivo";
+  src: url("fonts/archivo-latin-wdth.woff2") format("woff2");
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --paper: #e6e6e3;        /* newsprint grey, not cream */
+  --paper-raised: #efefec; /* table header and hover rows */
+  --ink: #161616;
+  --ink-soft: #3d3d3a;     /* secondary text; 9.9:1 on --paper */
+  --rule: #8c8c88;         /* thin rules between rows */
+  --spot: #1f3a93;         /* the one spot colour: latest year, selection */
+  --spot-ink: #ffffff;
+  --column: #161616;       /* the year columns in the chart */
+  --error: #a3221a;
+  --focus: #1f3a93;
+  --font: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  color-scheme: light;
+}
+
+/* Dark mode: the same page printed in reverse, for reading late at night. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #121212;
+    --paper-raised: #1c1c1b;
+    --ink: #e6e6e3;
+    --ink-soft: #b4b4af;
+    --rule: #5c5c58;
+    --spot: #9db1ff;
+    --spot-ink: #121212;
+    --column: #e6e6e3;
+    --error: #ff8a80;
+    --focus: #9db1ff;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1rem/1.5 var(--font);
+  font-stretch: 100%;
+  font-variant-numeric: tabular-nums; /* every figure lines up in columns */
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Browser surfaces carry the design too. */
+::selection { background: var(--spot); color: var(--spot-ink); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+a:hover { color: var(--spot); }
+html { scrollbar-color: var(--rule) var(--paper); }
+
+/* All page sections share one centred measure and one side gutter. */
+.masthead-inner,
+.tabs-inner,
+main,
+.colophon-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding-inline: clamp(16px, 4vw, 48px);
+}
+
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -100px;
+  padding: 8px 12px;
+  background: var(--ink);
+  color: var(--paper);
+  z-index: 10;
+}
+.skip-link:focus { top: 8px; }
+
+/* --- Masthead ----------------------------------------------------------------- */
+
+.masthead { border-bottom: 2px solid var(--ink); }
+.masthead-inner {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 4px 24px;
+  padding-block: 18px 14px;
+}
+.wordmark {
+  margin: 0;
+  font-size: clamp(1.4rem, 1rem + 1.4vw, 1.9rem);
+  font-weight: 800;
+  font-stretch: 75%;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+.masthead-source {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+/* Status: grey square while checking, ink when ok, red on error. */
+.health {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-stretch: 85%;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.health .dot { width: 8px; height: 8px; background: var(--rule); }
+.health[data-state="ok"] .dot { background: var(--ink); }
+.health[data-state="error"] { color: var(--error); }
+.health[data-state="error"] .dot { background: var(--error); }
+
+/* --- Tabs --------------------------------------------------------------------- */
+/* Selected state is a printed mark: the tab is filled with ink. */
+
+.tabs { border-bottom: 1px solid var(--ink); }
+.tabs-inner {
+  display: flex;
+  overflow-x: auto;           /* four tabs never wrap; they scroll on tiny screens */
+  scrollbar-width: none;
+}
+.tabs button {
+  flex: none;
+  min-height: 44px;
+  padding: 10px 20px;
+  border: 0;
+  border-right: 1px solid var(--ink);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-stretch: 85%;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.tabs button:first-child { border-left: 1px solid var(--ink); }
+.tabs button:hover { background: var(--paper-raised); }
+.tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.tabs button:focus-visible { outline-offset: -4px; outline-color: var(--paper); }
+.tabs button[aria-selected="false"]:focus-visible { outline-color: var(--focus); }
+
+/* --- Panels and headings ------------------------------------------------------ */
+
+main { padding-block: 0 64px; }
+
+h2, h3 { margin: 0; font-weight: 800; font-stretch: 80%; letter-spacing: 0; }
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 32px;
+  padding-block: 40px 16px;
+  border-bottom: 2px solid var(--ink);
+  margin-bottom: 16px;
+}
+.panel-head h2 { font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.25rem); line-height: 1.05; }
+
+/* --- Overview: the lead ------------------------------------------------------- */
+
+.lead {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 32px 56px;
+  align-items: end;
+  padding-block: 40px 32px;
+  border-bottom: 2px solid var(--ink);
+}
+
+/* The latest year's count owns the first screen. It is part of the heading
+   sentence, so it reads as a plain statement of fact, not a dashboard tile. */
+.headline { display: flex; flex-direction: column; gap: 12px; }
+.headline .figure {
+  font-size: clamp(4.25rem, 2rem + 9vw, 9rem);
+  font-weight: 800;
+  font-stretch: 62%;
+  line-height: 0.82;
+  letter-spacing: -0.035em;
+  color: var(--spot);
+}
+.headline-words {
+  max-width: 22ch;
+  font-size: clamp(1.25rem, 1rem + 1vw, 1.75rem);
+  font-weight: 700;
+  font-stretch: 90%;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+/* Two supporting facts on a ruled line, figures hard against the right. */
+.lead-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 28px 0 0;
+  border-top: 1px solid var(--ink);
+}
+.lead-facts > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 16px 0 0;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+.lead-facts > span + span { padding-left: 16px; border-left: 1px solid var(--rule); }
+.lead-facts strong {
+  color: var(--ink);
+  font-size: clamp(1.4rem, 1.1rem + 1vw, 2rem);
+  font-weight: 800;
+  font-stretch: 75%;
+  line-height: 1.1;
+}
+
+/* --- The year columns (signature) --------------------------------------------- */
+/* One column per year, filled with ruled lines like a column of agate type,
+   so its height reads as the printed length of that year's list. */
+
+.columns { margin: 0; min-width: 0; }
+.columns figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 16px;
+  padding-bottom: 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-stretch: 85%;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.readout {
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+.readout strong { color: var(--ink); font-weight: 800; }
+.columns-body svg { display: block; width: 100%; height: auto; overflow: visible; }
+.columns-wide { margin-bottom: 32px; }
+
+.columns .year { cursor: pointer; }
+.columns .col-hit { fill: transparent; }
+.columns .agate-ink { fill: var(--column); }
+.columns .agate-spot { fill: var(--spot); }
+.columns .col-cap { fill: var(--column); }
+.columns .col-cap.latest { fill: var(--spot); }
+.columns .baseline { stroke: var(--ink); stroke-width: 1; }
+.columns .label { fill: var(--ink); font: 600 11px var(--font); font-stretch: 85%; }
+.columns .label.latest { fill: var(--spot); font-weight: 800; }
+
+/* The column under the pointer or keyboard focus fills solid. */
+.columns .year.is-active .col { fill: var(--column); }
+.columns .year.is-active .col.latest { fill: var(--spot); }
+.columns .year:focus { outline: none; }
+.columns .year:focus-visible .col-hit { stroke: var(--focus); stroke-width: 2; }
+
+/* The one authored moment: the columns are set from the baseline up, year
+   by year, as if the list were being printed. Each column's delay is set
+   from app.js. Already visible by default; only animates if allowed. */
+@media (prefers-reduced-motion: no-preference) {
+  .columns.is-printing .col,
+  .columns.is-printing .col-cap {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: print-column 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+@keyframes print-column {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+
+/* --- Overview: digest tables -------------------------------------------------- */
+
+.digest {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 40px 56px;
+  padding-top: 32px;
+}
+.block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--ink);
+}
+.block-head h3 { font-size: 1.25rem; text-transform: uppercase; letter-spacing: 0.02em; }
+.block-head h3 span::before { content: ", "; }
+
+/* A plain action that looks like what it is: a link-like button. */
+.text-button {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--spot);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.text-button:hover { color: var(--ink); }
+
+/* --- Forms -------------------------------------------------------------------- */
+
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 0; }
+.controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-stretch: 85%;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+select {
+  min-height: 44px;           /* comfortable touch target */
+  min-width: 8.5rem;
+  padding: 8px 36px 8px 12px;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  background-color: var(--paper);
+  /* A drawn chevron instead of the browser's own arrow, so the control
+     matches the page. It's an inline SVG image, which the policy allows. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23161616' stroke-width='2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;            /* the label is small caps; the choice is body size */
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  appearance: none;
+  cursor: pointer;
+}
+select:hover { background-color: var(--paper-raised); }
+select:disabled { color: var(--ink-soft); border-color: var(--rule); cursor: progress; }
+@media (prefers-color-scheme: dark) {
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23e6e6e3' stroke-width='2'/%3E%3C/svg%3E");
+  }
+}
+
+/* --- Status messages ---------------------------------------------------------- */
+
+.message { margin: 12px 0; color: var(--ink); }
+.message:empty { display: none; }
+.message.loading::before {
+  content: "";
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-right: 8px;
+  background: var(--rule);
+  vertical-align: baseline;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .message.loading::before { animation: blink 1s steps(2, start) infinite; }
+}
+@keyframes blink { to { visibility: hidden; } }
+.message.error {
+  padding: 10px 12px;
+  border: 1px solid var(--error);
+  color: var(--error);
+  font-weight: 600;
+}
+/* Tables are faded while a new list loads, so the old one isn't mistaken
+   for the answer. */
+table[aria-busy="true"] { opacity: 0.45; }
+
+/* --- Agate tables ------------------------------------------------------------- */
+/* Dense rows, thin rules, figures right-aligned hard to the column edge. */
+
+.table-wrap { overflow-x: auto; } /* wide tables scroll inside, never the page */
+table.agate {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  font-stretch: 85%;          /* the same condensed width as the figures */
+  line-height: 1.2;
+}
+/* Short tables keep a column's measure so each figure sits near its label
+   instead of across an empty screen. */
+/* Each list tab is one column wide: its heading rule, controls, chart and
+   table all share the same right edge. The years and titles lists are a
+   fixed measure; the salaries panel fits its widest row, so every salary
+   sits just after the longest employer. */
+#panel-years,
+#panel-titles { max-width: 40rem; }
+#panel-salaries {
+  width: fit-content;
+  min-width: min(100%, 40rem);
+  max-width: 100%;
+}
+.agate th {
+  padding: 8px 12px 6px 0;
+  border-bottom: 1px solid var(--ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-stretch: 85%;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.agate td {
+  padding: 5px 16px 5px 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: baseline;
+}
+.agate th:last-child,
+.agate td:last-child { padding-right: 0; }
+.agate tbody tr:hover { background: var(--paper-raised); }
+.agate .num {
+  text-align: right;
+  white-space: nowrap;
+  font-stretch: 85%;
+}
+.agate td.num { font-weight: 700; }
+.agate .rank { width: 3ch; color: var(--ink-soft); }
+.agate td.rank { font-weight: 400; }
+@media (min-width: 601px) {
+  .agate .name { white-space: nowrap; }
+}
+.agate .name { font-weight: 700; }
+.agate .employer { color: var(--ink-soft); }
+/* The latest year's row in the years table carries the spot colour. */
+.agate tr.latest td { color: var(--spot); font-weight: 700; }
+
+/* --- Footer ------------------------------------------------------------------- */
+
+.colophon { border-top: 2px solid var(--ink); }
+.colophon-inner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 32px;
+  padding-block: 20px 32px;
+  color: var(--ink);
+  font-size: 0.875rem;
+}
+.colophon p { margin: 0; }
+
+/* --- Narrow screens ----------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .lead,
+  .digest { grid-template-columns: minmax(0, 1fr); }
+  .lead { gap: 32px; padding-top: 28px; }
+}
+
+@media (max-width: 600px) {
+  .masthead-inner { grid-template-columns: 1fr; }
+  /* Narrower letters and padding so all four tabs fit on a phone. */
+  .tabs-inner { padding-inline: 0; }
+  .tabs button { flex: 1 1 auto; padding-inline: 8px; font-stretch: 72%; letter-spacing: 0.02em; }
+  .tabs button:first-child { border-left: 0; }
+  .tabs button:last-child { border-right: 0; }
+  .panel-head { padding-top: 28px; }
+  /* Names and employers stack in one cell so the salary keeps its column. */
+  .agate .employer-col { display: none; }
+  .agate .employer-inline { display: block; font-weight: 400; color: var(--ink-soft); }
+}
+@media (min-width: 601px) {
+  .agate .employer-inline { display: none; }
+}
