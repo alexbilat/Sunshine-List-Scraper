@@ -22,3 +22,5 @@ __pycache__/
 
 # Learning notes are kept outside the repository.
 /learning/
+.impeccable
+.claude
