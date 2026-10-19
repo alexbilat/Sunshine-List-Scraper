@@ -24,3 +24,8 @@ __pycache__/
 /learning/
 .impeccable
 .claude
+
+# Tool caches.
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
