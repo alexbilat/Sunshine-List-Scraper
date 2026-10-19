@@ -48,11 +48,9 @@ def create_charts(yearly_summary, top_titles, yearly_chart_path, titles_chart_pa
                          linewidth=2, label='Avg Salary')
         salary_axis.set_ylabel('Average Salary ($)', color='crimson')
 
-        def format_salary_tick(value, position):
-            # Matplotlib passes a tick position too; only its numeric value is needed.
-            return f'${value:,.0f}'
-
-        salary_axis.yaxis.set_major_formatter(mticker.FuncFormatter(format_salary_tick))
+        # FuncFormatter passes (value, position); only the value is needed.
+        salary_axis.yaxis.set_major_formatter(
+            mticker.FuncFormatter(lambda value, position: f'${value:,.0f}'))
         # Title the figure's own axes rather than pyplot's "current" one, which
         # after twinx() is the salary axis; the title chart does the same.
         count_axis.set_title('Ontario Sunshine List — Average Salary & Headcount by Year')
