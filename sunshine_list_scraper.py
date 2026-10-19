@@ -25,9 +25,7 @@ def main():
             config.yearly_chart_path, config.titles_chart_path,
             timeout=config.request_timeout, max_retries=config.max_retries,
             backoff=config.retry_backoff, full_refresh=config.full_refresh)
-        if complete:
-            return 0
-        return 1
+        return 0 if complete else 1
     except (ScraperError, OSError, DatabaseConfigurationError, DatabaseAccessError,
             MigrationError) as error:
         # Expected request/data, file, and database failures get a concise
