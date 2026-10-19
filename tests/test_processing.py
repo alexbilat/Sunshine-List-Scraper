@@ -32,6 +32,10 @@ class ValidationTests(unittest.TestCase):
         self.assertEqual(normalize_text(123), '123')
         self.assertEqual(normalize_text(123.5), '123.5')
 
+    def test_normalize_text_collapses_nbsp_and_repeated_whitespace(self):
+        self.assertEqual(normalize_text(' Alex\xa0 \t Bilat\n'), 'Alex Bilat')
+        self.assertEqual(normalize_text(None), '')
+
     def test_whitespace_before_bom_does_not_hide_required_column(self):
         disclosure = Disclosure.from_source_row({
             ' \t﻿First_Name ': 'Alex',

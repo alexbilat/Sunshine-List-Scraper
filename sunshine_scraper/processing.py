@@ -48,6 +48,6 @@ def normalize_text(value):
     if isinstance(value, float) and not math.isfinite(value):
         raise ValueError("Expected a finite numeric scalar")
 
-    text = str(value).replace('\xa0', ' ')
-    words = text.split()  # Without an argument, split handles any whitespace.
-    return ' '.join(words)
+    # Without an argument, split treats any Unicode whitespace (including the
+    # non-breaking space) as a separator, so no separate replace is needed.
+    return ' '.join(str(value).split())
