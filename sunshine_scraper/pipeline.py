@@ -14,6 +14,8 @@ from .storage.repository import PostgresSalaryRepository
 from .sync import run_sync
 
 logger = logging.getLogger(__name__)
+# How many job titles the titles chart shows.
+TOP_TITLE_COUNT = 10
 
 
 def run(url, api_url, output_path, yearly_chart_path, titles_chart_path,
@@ -57,7 +59,7 @@ def export_from_database(connection, output_path, yearly_chart_path, titles_char
         write_records(reader.iter_export_records(), output_path)
         logger.info("Wrote %s records to %s", total, output_path)
         yearly_summary = reader.yearly_summary()
-        top_titles = reader.top_job_titles(10)
+        top_titles = reader.top_job_titles(TOP_TITLE_COUNT)
     print_yearly_summary(yearly_summary)
     # Once the TSV is saved, a chart failure should not discard it.
     try:
