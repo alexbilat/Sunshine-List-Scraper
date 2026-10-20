@@ -1,7 +1,7 @@
 """SQL reads behind the SalaryReader interface that the API and static site use."""
 from typing import Iterator, Protocol
 
-from .models import SalaryResult, TitleCount, YearSummary, format_cents
+from .models import PersonRow, SalaryResult, TitleCount, YearSummary, format_cents
 
 # The most rows one ranked list may return. The API validates against it, the
 # static site stores exactly this many, and the page's "Top N" options must
@@ -19,6 +19,12 @@ class SalaryReader(Protocol):
         ...
 
     def top_job_titles(self, limit: int = 10) -> list[TitleCount]:
+        ...
+
+    def person_history(self, first_name: str, last_name: str) -> list[PersonRow]:
+        ...
+
+    def iter_people(self, batch_size: int = 10000) -> Iterator[tuple[str, str, PersonRow]]:
         ...
 
 
@@ -78,6 +84,51 @@ class PostgresSalaryRepository:
             """,
             (limit,)).fetchall()
         return [TitleCount(*row) for row in rows]
+
+    def person_history(self, first_name: str, last_name: str) -> list[PersonRow]:
+        """Every disclosure for one exact full name, newest year first.
+
+        Matching uses fold_name (migration 003): case and accents are ignored,
+        but the whole name must match, so "Smi" finds no "Smith".
+        """
+        first_name, last_name = first_name.strip(), last_name.strip()
+        if not first_name or not last_name:
+            raise ValueError('first_name and last_name must not be blank')
+        rows = self.connection.execute(
+            """
+            SELECT first_name, last_name, job_title, employer, year, salary_cents
+            FROM salary_records
+            WHERE fold_name(last_name) = fold_name(%s)
+              AND fold_name(first_name) = fold_name(%s)
+            ORDER BY year DESC, salary_cents DESC, id
+            """,
+            (last_name, first_name),
+        ).fetchall()
+        return [PersonRow(*row) for row in rows]
+
+    def iter_people(self, batch_size: int = 10000) -> Iterator[tuple[str, str, PersonRow]]:
+        """Yield (folded last, folded first, row) sorted by those keys, for the static site.
+
+        The database does the folding so Python never re-implements it. Sorted
+        output lets the caller write one file per key group in constant memory.
+        Server-side cursor, so it needs an open transaction.
+
+        Sorted by the static site's shard key first (see shard_key in
+        static_site.py): sorting by name alone can interleave "o'brien" and
+        "obrien" between other "o..." names, and a shard must arrive in one run.
+        """
+        with self.connection.cursor(name='iter_people') as cursor:
+            cursor.itersize = batch_size
+            cursor.execute(
+                """
+                SELECT fold_name(last_name) AS last_key, fold_name(first_name) AS first_key,
+                       first_name, last_name, job_title, employer, year, salary_cents
+                FROM salary_records
+                ORDER BY left(regexp_replace(last_key, '[^a-z]', '', 'g'), 2),
+                         last_key, first_key, year DESC, salary_cents DESC, id
+                """)
+            for last_key, first_key, *fields in cursor:
+                yield last_key, first_key, PersonRow(*fields)
 
     def iter_export_records(self, batch_size: int = 10000) -> Iterator[dict]:
         """Yield TSV rows, highest salary first, without loading all into memory.
