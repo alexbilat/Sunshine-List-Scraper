@@ -47,6 +47,7 @@
       <button type="button" role="tab" id="tab-salaries" aria-controls="panel-salaries" aria-selected="false">Top salaries</button>
       <button type="button" role="tab" id="tab-years" aria-controls="panel-years" aria-selected="false">Years</button>
       <button type="button" role="tab" id="tab-titles" aria-controls="panel-titles" aria-selected="false">Job titles</button>
+      <button type="button" role="tab" id="tab-search" aria-controls="panel-search" aria-selected="false">Search</button>
     </div>
   </nav>
 
@@ -183,6 +184,31 @@
         <table id="titles-table" class="agate" hidden>
           <thead>
             <tr><th scope="col" class="num rank">#</th><th scope="col">Job title</th><th scope="col" class="num">Times listed</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-search" role="tabpanel" aria-labelledby="tab-search" hidden>
+      <div class="panel-head">
+        <h2>Look up one person</h2>
+        <!-- Searches on button or Enter, not while typing. -->
+        <form class="controls" id="search-form">
+          <label>First name
+            <input id="search-first" name="first_name" type="text" required maxlength="100" autocomplete="off">
+          </label>
+          <label>Last name
+            <input id="search-last" name="last_name" type="text" required maxlength="100" autocomplete="off">
+          </label>
+          <button type="submit">Search</button>
+        </form>
+      </div>
+      <p class="message" id="search-message" role="status" aria-live="polite">Enter a first and last name. Names must match exactly as published; capitals and accents don't matter.</p>
+      <div class="table-wrap">
+        <table id="search-table" class="agate" hidden>
+          <thead>
+            <tr><th scope="col">Year</th><th scope="col">Job title</th><th scope="col" class="employer-col">Employer</th><th scope="col" class="num">Salary paid</th></tr>
           </thead>
           <tbody></tbody>
         </table>
