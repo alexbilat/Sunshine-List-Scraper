@@ -19,7 +19,7 @@ from sunshine_scraper.api.app import app, get_open_reader
 from sunshine_scraper import static_site
 from sunshine_scraper.static_site import PublishError, build_from_database, build_site, publish
 from sunshine_scraper.storage import connection as connection_module
-from sunshine_scraper.storage.models import SalaryResult
+from sunshine_scraper.storage.models import PersonRow, SalaryResult
 
 from fakes import FakeSalaryReader
 
@@ -52,9 +52,30 @@ class BuildSiteTests(unittest.TestCase):
         self.assertFalse((self.site / 'data/salaries/2023.json').exists())
         # The largest list the page can ask for is stored.
         self.assertEqual(reader.calls, [('yearly_summary',), ('top_job_titles', 100),
-                                        ('get_top_salaries', 2024, 100)])
+                                        ('get_top_salaries', 2024, 100), ('iter_people',)])
         self.assertEqual(read_json(self.site / 'data/meta.json'),
                          {'generated_at': '2026-10-12T15:30:00+00:00'})
+
+    def test_people_are_sharded_by_surname_prefix(self):
+        def person(first, last, year=2024, title='Nurse'):
+            return PersonRow(first, last, title, 'Hospital', year, 10000000)
+        # Sorted by shard key, as iter_people promises: '_' < 'ob' < 'sm'.
+        people = [('', 'x', person('X', '')),
+                  ("o'brien", 'pat', person('Pat', "O'Brien")),
+                  ('smith', 'jen', person('Jen', 'Smith', 2024)),
+                  ('smith', 'jen', person('Jen', 'Smith', 2023, title='Chief')),
+                  ('smyth', 'al', person('Al', 'Smyth'))]
+        build_site(FakeSalaryReader(people=people), self.site, GENERATED_AT)
+        folder = self.site / 'data/people'
+        self.assertEqual(sorted(path.name for path in folder.iterdir()),
+                         ['_.json', 'ob.json', 'sm.json'])
+        shard = read_json(folder / 'sm.json')
+        self.assertEqual(sorted(shard['people']), ['smith|jen', 'smyth|al'])
+        rows = shard['people']['smith|jen']
+        self.assertEqual([row[2] for row in rows], [2024, 2023])
+        # Rows point at the shard's shared string tables.
+        self.assertEqual(shard['titles'][rows[1][4]], 'Chief')
+        self.assertEqual(shard['employers'][rows[0][5]], 'Hospital')
 
     def test_json_matches_the_live_api_exactly(self):
         # The page treats both sources the same, so the shapes must be identical.
