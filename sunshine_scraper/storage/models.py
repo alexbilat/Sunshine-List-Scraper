@@ -138,6 +138,22 @@ class SalaryResult:
 
 
 @dataclass(frozen=True)
+class PersonRow:
+    """One disclosure in a person's history (a name search result)."""
+
+    first_name: str
+    last_name: str
+    job_title: str
+    employer: str
+    year: int
+    salary_cents: int
+
+    @property
+    def name(self):
+        return f'{self.first_name} {self.last_name}'
+
+
+@dataclass(frozen=True)
 class YearSummary:
     """Aggregates for one year; average_cents is exact (Decimal) or None."""
 
