@@ -85,6 +85,8 @@ const liveSource = {
   titles: (limit) => getJson('/api/titles/top', SERVER_UNREACHABLE, { limit }),
   topSalaries: (year, limit) =>
     getJson('/api/salaries/top', SERVER_UNREACHABLE, { year, limit }),
+  personHistory: (first, last) =>
+    getJson('/api/people', SERVER_UNREACHABLE, { first_name: first, last_name: last }),
   async status() {
     await getJson('/api/health', SERVER_UNREACHABLE);
     return 'Database connected';
@@ -99,6 +101,7 @@ const liveSource = {
 // `limit` of them, which is exactly what the API would have returned.
 // Paths have no leading slash: GitHub Pages serves the site from a
 // sub-folder (/<repository>/), and relative paths work wherever it lives.
+const shards = new Map(); // surname prefix -> promise of that shard's JSON
 const FILES_UNREACHABLE =
   'Could not load the data. Check your internet connection and try again.';
 const staticSource = {
@@ -108,6 +111,27 @@ const staticSource = {
   topSalaries: async (year, limit) =>
     (await getJson(`data/salaries/${encodeURIComponent(year)}.json`, FILES_UNREACHABLE))
       .slice(0, Number(limit)),
+  // The build splits everyone into one file per first two letters of the
+  // surname (see shard_key in static_site.py); only that file is downloaded.
+  async personHistory(first, last) {
+    const key = shardKey(foldName(last));
+    if (!shards.has(key)) {
+      shards.set(key, getJson(`data/people/${key}.json`, FILES_UNREACHABLE)
+        .catch((error) => {
+          shards.delete(key); // allow a retry
+          // No file means nobody has a surname starting like this.
+          if (error.status === 404) return null;
+          throw error;
+        }));
+    }
+    const shard = await shards.get(key);
+    const rows = shard?.people[`${foldName(last)}|${foldName(first)}`] ?? [];
+    return rows.map(([firstName, lastName, year, cents, title, employer]) => ({
+      name: `${firstName} ${lastName}`, first_name: firstName, last_name: lastName,
+      job_title: shard.titles[title], employer: shard.employers[employer],
+      year, salary_cents: cents, salary: formatCents(cents),
+    }));
+  },
   async status() {
     const meta = await getJson('data/meta.json', FILES_UNREACHABLE);
     const date = new Date(meta.generated_at).toLocaleDateString('en-CA', {
@@ -122,6 +146,20 @@ const staticSource = {
 const source =
   document.querySelector('meta[name="data-source"]')?.content === 'static'
     ? staticSource : liveSource;
+
+// The one rule for "same name": lowercase with accents removed. PostgreSQL's
+// fold_name does the same for the live search and the static build.
+// shortcut: letters such as o-slash, sharp s and oe have no accent to strip, so
+// the browser and PostgreSQL's unaccent may disagree on them; upgrade if a
+// real name fails to match.
+function foldName(text) {
+  return text.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+// The shard file for a folded surname; must match shard_key in static_site.py.
+function shardKey(folded) {
+  return folded.replace(/[^a-z]/g, '').slice(0, 2) || '_';
+}
 
 // --- Formatting ---------------------------------------------------------------
 
@@ -189,6 +227,17 @@ function titleRow(title, index) {
     { text: String(index + 1), className: 'num rank' },
     { text: title.job_title },
     { text: wholeNumber.format(title.appearances), className: 'num' },
+  ]);
+}
+
+function personRow(item) {
+  const title = element('td', '', item.job_title);
+  title.append(element('span', 'employer-inline', item.employer));
+  return tableRow([
+    { text: String(item.year) },
+    title,
+    { text: item.employer, className: 'employer employer-col' },
+    { text: formatCents(item.salary_cents), className: 'num' },
   ]);
 }
 
@@ -597,6 +646,28 @@ function showTitles() {
   });
 }
 
+// --- Panel: search ------------------------------------------------------------
+
+function searchPerson(event) {
+  event.preventDefault();
+  const first = $('search-first').value.trim();
+  const last = $('search-last').value.trim();
+  if (!first || !last) {
+    showMessage($('search-message'), 'Enter both a first and a last name.', 'error');
+    return;
+  }
+  loadTable({
+    table: $('search-table'),
+    message: $('search-message'),
+    loading: `Searching${ELLIPSIS}`,
+    fetchRows: () => source.personHistory(first, last),
+    toRow: personRow,
+    done: (items) => (items.length
+      ? `${items.length} disclosure${items.length === 1 ? '' : 's'} for ${first} ${last}.`
+      : `No one named ${first} ${last} is on the list. Names must match exactly as published.`),
+  });
+}
+
 // --- Tabs ---------------------------------------------------------------------
 
 // Each panel loads its data the first time it is opened, not on page load, so
@@ -662,6 +733,7 @@ function start() {
   for (const form of [$('salaries-form'), $('titles-form')]) {
     form.addEventListener('submit', (event) => event.preventDefault());
   }
+  $('search-form').addEventListener('submit', searchPerson);
   $('salaries-year').addEventListener('change', showTopSalaries);
   $('salaries-limit').addEventListener('change', showTopSalaries);
   $('titles-limit').addEventListener('change', showTitles);
