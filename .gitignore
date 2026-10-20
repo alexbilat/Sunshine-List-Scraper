@@ -19,6 +19,9 @@ __pycache__/
 
 # Built static website (publish_site.py); it is published to the gh-pages branch.
 /site/
+DESIGN.md
+.impeccable
+
 
 # Learning notes are kept outside the repository.
 /learning/
