@@ -9,7 +9,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from pydantic import BaseModel
 
-from ..storage.models import SalaryResult, TitleCount, YearSummary, format_cents
+from ..storage.models import PersonRow, SalaryResult, TitleCount, YearSummary, format_cents
 
 
 class Health(BaseModel):
@@ -62,6 +62,25 @@ class Salary(BaseModel):
                    last_name=result.last_name, employer=result.employer,
                    salary_cents=result.salary_cents,
                    salary=format_cents(result.salary_cents))
+
+
+class PersonSalary(BaseModel):
+    """One disclosure in a person's history (name search)."""
+
+    name: str
+    first_name: str
+    last_name: str
+    job_title: str
+    employer: str
+    year: int
+    salary_cents: int
+    salary: str
+
+    @classmethod
+    def from_row(cls, row: PersonRow) -> 'PersonSalary':
+        return cls(name=row.name, first_name=row.first_name, last_name=row.last_name,
+                   job_title=row.job_title, employer=row.employer, year=row.year,
+                   salary_cents=row.salary_cents, salary=format_cents(row.salary_cents))
 
 
 def round_to_cents(average_cents: Decimal | None) -> int | None:
