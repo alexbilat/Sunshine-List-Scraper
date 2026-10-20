@@ -648,24 +648,43 @@ function showTitles() {
 
 // --- Panel: search ------------------------------------------------------------
 
-function searchPerson(event) {
+// Every way to cut a typed name into first + last: "Mary Anne Smith" is
+// ("Mary", "Anne Smith") or ("Mary Anne", "Smith"). "Last, First" is exact.
+// Capped so a long pasted string can't fire many requests.
+function nameSplits(text) {
+  if (text.includes(',')) {
+    const [last, first] = text.split(',').map((part) => part.trim());
+    return first && last ? [[first, last]] : [];
+  }
+  const words = text.split(/\s+/).filter(Boolean).slice(0, 4);
+  return words.slice(1).map((_, i) => [words.slice(0, i + 1).join(' '), words.slice(i + 1).join(' ')]);
+}
+
+async function searchPerson(event) {
   event.preventDefault();
-  const first = $('search-first').value.trim();
-  const last = $('search-last').value.trim();
-  if (!first || !last) {
-    showMessage($('search-message'), 'Enter both a first and a last name.', 'error');
+  const text = $('search-input').value.trim();
+  const splits = nameSplits(text);
+  const message = $('search-message');
+  if (splits.length === 0) {
+    showMessage(message, 'Enter both a first and a last name, e.g. Jennifer Smith.', 'error');
     return;
   }
-  loadTable({
+  const button = $('search-button');
+  button.classList.add('is-searching');
+  await loadTable({
     table: $('search-table'),
-    message: $('search-message'),
+    message,
     loading: `Searching${ELLIPSIS}`,
-    fetchRows: () => source.personHistory(first, last),
+    fetchRows: async () => {
+      const found = (await Promise.all(splits.map(([first, last]) => source.personHistory(first, last)))).flat();
+      return found.sort((a, b) => b.year - a.year || b.salary_cents - a.salary_cents);
+    },
     toRow: personRow,
     done: (items) => (items.length
-      ? `${items.length} disclosure${items.length === 1 ? '' : 's'} for ${first} ${last}.`
-      : `No one named ${first} ${last} is on the list. Names must match exactly as published.`),
+      ? `${items.length} disclosure${items.length === 1 ? '' : 's'} for ${text}.`
+      : `No one named ${text} is on the list. Names must match exactly as published.`),
   });
+  button.classList.remove('is-searching');
 }
 
 // --- Tabs ---------------------------------------------------------------------

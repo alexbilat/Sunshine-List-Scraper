@@ -194,17 +194,14 @@
       <div class="panel-head">
         <h2>Look up one person</h2>
         <!-- Searches on button or Enter, not while typing. -->
-        <form class="controls" id="search-form">
-          <label>First name
-            <input id="search-first" name="first_name" type="text" required maxlength="100" autocomplete="off">
-          </label>
-          <label>Last name
-            <input id="search-last" name="last_name" type="text" required maxlength="100" autocomplete="off">
-          </label>
-          <button type="submit">Search</button>
+        <form class="search-bar" id="search-form" role="search">
+          <label class="visually-hidden" for="search-input">Name</label>
+          <input id="search-input" name="q" type="search" required maxlength="200"
+                 autocomplete="off" enterkeyhint="search" placeholder="First and last name, e.g. Jennifer Smith">
+          <button type="submit" id="search-button"><span class="search-label">Search</span></button>
         </form>
       </div>
-      <p class="message" id="search-message" role="status" aria-live="polite">Enter a first and last name. Names must match exactly as published; capitals and accents don't matter.</p>
+      <p class="message" id="search-message" role="status" aria-live="polite">Type a first and last name and press Enter. Names must match exactly as published; capitals and accents don't matter.</p>
       <div class="table-wrap">
         <table id="search-table" class="agate" hidden>
           <thead>

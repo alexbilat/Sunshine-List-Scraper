@@ -373,20 +373,39 @@ select {
   appearance: none;
   cursor: pointer;
 }
-input[type="text"], .controls button[type="submit"] {
-  min-height: 44px;
-  padding: 8px 12px;
-  border: 1px solid var(--ink);
-  border-radius: 0;
-  background-color: var(--paper);
-  color: var(--ink);
-  font: inherit;
-  font-size: 1rem;
-  font-weight: 600;
-  text-transform: none;
-  letter-spacing: 0;
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
 }
-.controls button[type="submit"] { background-color: var(--ink); color: var(--paper); cursor: pointer; }
+.search-bar { display: flex; flex: 1 1 28rem; max-width: 40rem; margin: 0; }
+.search-bar input {
+  flex: 1; min-width: 0; min-height: 48px; padding: 8px 14px;
+  border: 1px solid var(--ink); border-right: 0; border-radius: 0;
+  background: var(--paper); color: var(--ink); font: inherit; font-size: 1rem;
+}
+.search-bar input:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.search-bar button {
+  position: relative; min-width: 7rem; min-height: 48px; padding: 8px 22px;
+  border: 1px solid var(--ink); border-radius: 0; background: var(--ink); color: var(--paper);
+  font: inherit; font-size: 0.95rem; font-weight: 700; font-stretch: 85%;
+  text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer; overflow: hidden;
+  transition: background-color 0.2s, color 0.2s, transform 0.1s;
+}
+.search-bar button:hover { background: var(--spot); border-color: var(--spot); }
+.search-bar button:active { transform: scale(0.97); }
+.search-bar button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* While a search runs, a light band sweeps across the button. */
+.search-bar button.is-searching { cursor: progress; background: var(--spot); border-color: var(--spot); }
+.search-bar button.is-searching::after {
+  content: ""; position: absolute; inset: 0; width: 40%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.45), transparent);
+  animation: search-sweep 0.9s ease-in-out infinite;
+}
+@keyframes search-sweep { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+@media (prefers-reduced-motion: reduce) {
+  .search-bar button.is-searching::after { animation: none; width: 100%; opacity: 0.25; }
+  .search-bar button { transition: none; }
+}
 select:hover { background-color: var(--paper-raised); }
 select:disabled { color: var(--ink-soft); border-color: var(--rule); cursor: progress; }
 @media (prefers-color-scheme: dark) {
