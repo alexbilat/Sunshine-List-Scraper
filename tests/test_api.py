@@ -70,6 +70,27 @@ class DataRouteTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 422)
         self.assertEqual(self.reader.calls, [])
 
+    def test_person_history_passes_names_and_shapes_rows(self):
+        from sunshine_scraper.storage.models import PersonRow
+        self.reader.people = [('smith', 'jen', PersonRow('Jen', 'Smith', 'Nurse', 'Hospital',
+                                                         2024, 12345678))]
+        response = self.client.get('/api/people',
+                                   params={'first_name': 'Jen', 'last_name': 'Smith'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'name': 'Jen Smith', 'first_name': 'Jen', 'last_name': 'Smith',
+            'job_title': 'Nurse', 'employer': 'Hospital', 'year': 2024,
+            'salary_cents': 12345678, 'salary': '123456.78'}])
+        self.assertEqual(self.reader.calls, [('person_history', 'Jen', 'Smith')])
+
+    def test_person_history_rejects_missing_blank_and_long_names(self):
+        for params in [{}, {'first_name': 'Jen'}, {'first_name': 'Jen', 'last_name': '   '},
+                       {'first_name': '', 'last_name': 'Smith'},
+                       {'first_name': 'J' * 101, 'last_name': 'Smith'}]:
+            with self.subTest(params=params):
+                self.assertEqual(self.client.get('/api/people', params=params).status_code, 422)
+        self.assertEqual(self.reader.calls, [])
+
     def test_only_reads_are_allowed(self):
         response = self.client.post('/api/years')
         self.assertEqual(response.status_code, 405)  # Method Not Allowed
