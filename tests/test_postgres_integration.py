@@ -186,6 +186,23 @@ class ReadTests(PostgresTestCase):
         self.assertEqual(self.reader.get_top_salaries(2024, 1)[0].salary_cents, 20000005)
 
 
+class NameSearchTests(PostgresTestCase):
+    def test_exact_full_name_ignoring_case_and_accents(self):
+        def person(first, last, year=2024):
+            return Disclosure(first, last, 'Nurse', 'Hospital', year, 10000000)
+        self.load('a', [person('Marie', 'B\u00e9langer', 2023), person('Marie', 'B\u00e9langer', 2024),
+                        person('Marie', 'Belangerson'), person('Mario', 'B\u00e9langer')])
+        for first, last in [('marie', 'BELANGER'), ('MARIE', 'b\u00e9langer'), ('  Marie ', 'Belanger')]:
+            rows = self.reader.person_history(first, last)
+            self.assertEqual([row.year for row in rows], [2024, 2023], (first, last))
+        self.assertEqual(self.reader.person_history('Marie', 'Belang'), [])  # exact, not prefix
+        with self.assertRaises(ValueError):
+            self.reader.person_history('Marie', ' ')
+        with self.connection.transaction():
+            keys = {(last, first) for last, first, _ in self.reader.iter_people(batch_size=1)}
+        self.assertIn(('belanger', 'marie'), keys)
+
+
 class SyncTests(PostgresTestCase):
     def run_sync_with(self, csv_download):
         link = 'https://www.ontario.ca/artifacts/2025/Compendium/csv-id/data.csv'
