@@ -70,7 +70,9 @@ anyone can use.
    Pages. The public site works exactly like the local one but needs no server
    or database, so it is free to host and stays up permanently. A small
    `meta.json` records when it was built, and the page header shows
-   "Data updated <date>" instead of the live database status.
+   "Data updated <date>" instead of the live database status. The Search tab
+   works there too: everyone is pre-split into small files by the first two
+   letters of the surname, and the page downloads only the one it needs.
 
 ## Engineering highlights
 
@@ -218,6 +220,7 @@ Available while the local server is running. All endpoints are `GET` and return 
 | `/api/years` | Headcount and average salary for each year |
 | `/api/titles/top?limit=10` | Most common job titles (`limit` 1–100) |
 | `/api/salaries/top?year=2025&limit=10` | Highest salaries in a year (`limit` 1–100) |
+| `/api/people?first_name=Jane&last_name=Doe` | Every disclosure for one exact name; case and accents ignored |
 
 ```json
 GET /api/salaries/top?year=2025&limit=1
