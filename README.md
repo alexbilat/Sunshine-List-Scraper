@@ -70,8 +70,8 @@ anyone can use.
    Pages. The public site works exactly like the local one but needs no server
    or database, so it is free to host and stays up permanently. A small
    `meta.json` records when it was built, and the page header shows
-   "Data updated <date>" instead of the live database status. The Search tab
-   works there too: everyone is pre-split into small files by the first two
+   "Data updated <date>" instead of the live database status. The site has Overview, Top salaries, Years, Job titles, and Search tabs, and
+   Search works there too: everyone is pre-split into small files by the first two
    letters of the surname, and the page downloads only the one it needs.
 
 ## Engineering highlights
@@ -204,9 +204,11 @@ in `site/` instead.
 | Show pending schema changes | `python -m sunshine_scraper.storage migrate --status` |
 | Run the tests | `python -m unittest discover -s tests -v` |
 
-To keep data fresh, schedule the first two commands to run daily (Windows Task
-Scheduler or `cron`). Runs where nothing changed finish in about a minute, and
-the site is published only when you choose.
+To keep data fresh on Windows, schedule `daily_update.cmd` to run daily in Task
+Scheduler. It runs the scraper, then publishes the site only if the scraper
+succeeded, and logs to `logs\update-YYYY-MM-DD.log` (about a month is kept).
+On other systems, schedule the first two commands with `cron`. Runs where
+nothing changed finish in about a minute.
 
 ---
 
@@ -245,6 +247,7 @@ log level, API limits (60 requests/minute per client, 4 concurrent queries,
 ```
 sunshine_list_scraper.py   Scraper entry point: sync the database, then export
 publish_site.py            Build the static site and push it to GitHub Pages
+daily_update.cmd           Windows daily job: scrape, then publish if it succeeded
 config.py                  Settings (everything except the database URL)
 migrations/                Numbered, checksummed SQL schema files
 sunshine_scraper/
