@@ -124,7 +124,7 @@ class PostgresSalaryRepository:
                 SELECT fold_name(last_name) AS last_key, fold_name(first_name) AS first_key,
                        first_name, last_name, job_title, employer, year, salary_cents
                 FROM salary_records
-                ORDER BY left(regexp_replace(last_key, '[^a-z]', '', 'g'), 2),
+                ORDER BY left(regexp_replace(fold_name(last_name), '[^a-z]', '', 'g'), 2),
                          last_key, first_key, year DESC, salary_cents DESC, id
                 """)
             for last_key, first_key, *fields in cursor:
