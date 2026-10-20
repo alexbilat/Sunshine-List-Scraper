@@ -26,7 +26,7 @@ from ..storage.connection import (DatabaseAccessError, DatabaseConfigurationErro
                                   DatabaseSettings, open_read_only_connection)
 from ..storage.repository import MAX_LIMIT, PostgresSalaryRepository, SalaryReader
 from .ratelimit import RateLimiter
-from .schemas import Health, Salary, TitleStats, YearStats
+from .schemas import Health, PersonSalary, Salary, TitleStats, YearStats
 
 logger = logging.getLogger(__name__)
 
@@ -187,6 +187,8 @@ OpenReader = Annotated[Callable[[], ContextManager[SalaryReader]], Depends(get_o
 Year = Annotated[int, Query(ge=0, le=9999, description='Disclosure year, e.g. 2024')]
 Limit = Annotated[int, Query(ge=1, le=MAX_LIMIT,
                              description=f'Number of rows (1-{MAX_LIMIT})')]
+# Both names are required; \S rejects whitespace-only values with a 422.
+PersonName = Annotated[str, Query(min_length=1, max_length=100, pattern=r'\S')]
 
 
 # --- Errors -----------------------------------------------------------------
@@ -245,6 +247,15 @@ def top_salaries(open_reader: OpenReader, year: Year, limit: Limit = 10) -> list
     with open_reader() as reader:
         results = reader.get_top_salaries(year, limit)
     return [Salary.from_result(result) for result in results]
+
+
+@app.get('/api/people', response_model=list[PersonSalary])
+def people(open_reader: OpenReader, first_name: PersonName,
+           last_name: PersonName) -> list[PersonSalary]:
+    """Every disclosure for one exact name (case and accents ignored), newest first."""
+    with open_reader() as reader:
+        rows = reader.person_history(first_name, last_name)
+    return [PersonSalary.from_row(row) for row in rows]
 
 
 # --- Frontend -----------------------------------------------------------------
