@@ -5,7 +5,7 @@ collected, cleaned, stored in PostgreSQL, and published as a searchable website.
 
 ### 🔗 [View the live site →](https://alexbilat.github.io/Sunshine-List-Scraper/)
 
-![The website, showing the ten highest salaries disclosed for 2025](assets/website.png)
+![The website Overview: 2025 headcount, the yearly chart, top salaries and job titles](assets/website.png)
 
 Ontario's [Public Sector Salary Disclosure](https://www.ontario.ca/page/public-sector-salary-disclosure)
 (the "Sunshine List") is published as 81 separate datasets spread across two
