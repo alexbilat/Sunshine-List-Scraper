@@ -4,7 +4,7 @@ Not named test_*.py, so unittest discovery imports it only when a test does.
 """
 from decimal import Decimal
 
-from sunshine_scraper.storage.models import PersonRow, SalaryResult, TitleCount, YearSummary
+from sunshine_scraper.storage.models import SalaryResult, TitleCount, YearSummary
 
 DEFAULT_YEARS = [YearSummary(2023, 0, None),  # nobody listed: no salaries file, no 422
                  YearSummary(2024, 2, Decimal('11172839.5000000000'))]
