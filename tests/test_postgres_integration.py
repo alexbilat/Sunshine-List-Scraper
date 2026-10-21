@@ -3,7 +3,6 @@
 Set SUNSHINE_TEST_DATABASE_URL to enable. Each test owns a randomly named schema
 and removes only that schema. These checks never download Sunshine List data.
 """
-from contextlib import contextmanager
 import os
 from pathlib import Path
 import shutil
