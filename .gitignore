@@ -19,6 +19,7 @@ __pycache__/
 
 # Built static website (publish_site.py); it is published to the gh-pages branch.
 /site/
+# Local design notes and tool state.
 DESIGN.md
 .impeccable
 
