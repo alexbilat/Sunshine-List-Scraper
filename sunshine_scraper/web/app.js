@@ -241,6 +241,19 @@ function personRow(item) {
   ]);
 }
 
+// --- Person history -----------------------------------------------------------
+
+// One row per year, oldest first. A name can appear twice in a year (two jobs,
+// or two people sharing a name), so the highest salary stands for that year.
+function yearlyPeak(rows) {
+  const best = new Map();
+  for (const row of rows) {
+    const kept = best.get(row.year);
+    if (!kept || row.salary_cents > kept.salary_cents) best.set(row.year, row);
+  }
+  return [...best.values()].sort((a, b) => a.year - b.year);
+}
+
 // Replace a table's rows, and hide the table when there is nothing to show.
 function fillTable(table, rows) {
   table.tBodies[0].replaceChildren(...rows);
