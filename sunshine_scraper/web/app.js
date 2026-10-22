@@ -330,6 +330,27 @@ function drawHistory(rows) {
       points: peaks.map((peak, i) => `${x(i)},${y(peak.salary_cents)}`).join(' '),
     }));
   }
+  // Year labels under the line: every year when there are few, else the ends.
+  peaks.forEach((peak, i) => {
+    const isEnd = i === 0 || i === peaks.length - 1;
+    if (peaks.length > 8 && !isEnd) return;
+    const label = svg('text', {
+      class: 'label', x: x(i), y: height - 6,
+      'text-anchor': peaks.length === 1 ? 'middle' : i === 0 ? 'start' : i === peaks.length - 1 ? 'end' : 'middle',
+    });
+    label.textContent = String(peak.year);
+    chart.append(label);
+  });
+
+  // The scale's two ends, so the line's height can be read as money.
+  const scaleLabel = (value, yPosition) => {
+    const label = svg('text', { class: 'label scale', x: inset.left, y: yPosition });
+    label.textContent = formatCents(value);
+    chart.append(label);
+  };
+  scaleLabel(Math.max(...cents), inset.top - 10);
+  if (span > 0) scaleLabel(low, height - inset.bottom - 6);
+
   // One dot per year. Hover or keyboard focus reads that year out; with no
   // pointer on the chart the readout stays on the latest year.
   const readout = $('history-readout');
