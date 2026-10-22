@@ -330,6 +330,25 @@ function drawHistory(rows) {
       points: peaks.map((peak, i) => `${x(i)},${y(peak.salary_cents)}`).join(' '),
     }));
   }
+  // One dot per year. Hover or keyboard focus reads that year out; with no
+  // pointer on the chart the readout stays on the latest year.
+  const readout = $('history-readout');
+  const showPoint = (peak) => readout.replaceChildren(
+    `${peak.year}: `, element('strong', '', formatCents(peak.salary_cents)));
+  peaks.forEach((peak, i) => {
+    const latest = i === peaks.length - 1;
+    const dot = svg('circle', {
+      class: latest ? 'history-dot latest' : 'history-dot',
+      cx: x(i), cy: y(peak.salary_cents), r: 4, tabindex: 0, role: 'img',
+      'aria-label': `${peak.year}: ${formatCents(peak.salary_cents)}`,
+    });
+    dot.addEventListener('mouseenter', () => showPoint(peak));
+    dot.addEventListener('focus', () => showPoint(peak));
+    dot.addEventListener('mouseleave', () => showPoint(peaks[peaks.length - 1]));
+    chart.append(dot);
+  });
+  showPoint(peaks[peaks.length - 1]);
+
   body.replaceChildren(chart);
 }
 
