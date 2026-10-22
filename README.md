@@ -73,6 +73,9 @@ anyone can use.
    "Data updated <date>" instead of the live database status. The site has Overview, Top salaries, Years, Job titles, and Search tabs, and
    Search works there too: everyone is pre-split into small files by the first two
    letters of the surname, and the page downloads only the one it needs.
+   A search result shows a salary-over-time line, a year-over-year Change
+   column, and a first-to-latest summary. Names carry no ID, so a repeated year
+   is flagged as possibly more than one person.
 
 ## Engineering highlights
 
