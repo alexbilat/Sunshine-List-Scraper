@@ -254,6 +254,23 @@ function yearlyPeak(rows) {
   return [...best.values()].sort((a, b) => a.year - b.year);
 }
 
+// Add change_cents to every row: the year's peak salary minus the previous
+// listed year's peak, or null for the first year. A gap in the years compares
+// against the last year that is listed.
+function addChanges(rows) {
+  const peaks = yearlyPeak(rows);
+  const change = new Map(peaks.map((peak, i) =>
+    [peak.year, i === 0 ? null : peak.salary_cents - peaks[i - 1].salary_cents]));
+  return rows.map((row) => ({ ...row, change_cents: change.get(row.year) }));
+}
+
+// A signed amount such as "+$1,200.00" (U+2212 minus for a drop).
+function formatChange(cents) {
+  if (cents === null || cents === undefined) return EM_DASH;
+  if (cents === 0) return formatCents(0);
+  return `${cents > 0 ? '+' : '−'}${formatCents(Math.abs(cents))}`;
+}
+
 // Replace a table's rows, and hide the table when there is nothing to show.
 function fillTable(table, rows) {
   table.tBodies[0].replaceChildren(...rows);
