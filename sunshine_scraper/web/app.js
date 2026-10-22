@@ -238,6 +238,7 @@ function personRow(item) {
     title,
     { text: item.employer, className: 'employer employer-col' },
     { text: formatCents(item.salary_cents), className: 'num' },
+    { text: formatChange(item.change_cents), className: 'num change-col' },
   ]);
 }
 
@@ -707,7 +708,8 @@ async function searchPerson(event) {
     loading: `Searching${ELLIPSIS}`,
     fetchRows: async () => {
       const found = (await Promise.all(splits.map(([first, last]) => source.personHistory(first, last)))).flat();
-      return found.sort((a, b) => b.year - a.year || b.salary_cents - a.salary_cents);
+      return addChanges(found)
+        .sort((a, b) => b.year - a.year || b.salary_cents - a.salary_cents);
     },
     toRow: personRow,
     done: (items) => (items.length
