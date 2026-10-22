@@ -280,6 +280,17 @@ h2, h3 { margin: 0; font-weight: 800; font-stretch: 80%; letter-spacing: 0; }
 .columns .label { fill: var(--ink); font: 600 11px var(--font); font-stretch: 85%; }
 .columns .label.latest { fill: var(--spot); font-weight: 800; }
 
+/* --- Person history line ------------------------------------------------------ */
+
+.history { margin-bottom: 24px; }
+.history .history-line { stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+.history .history-dot { fill: var(--column); cursor: pointer; }
+.history .history-dot.latest { fill: var(--spot); }
+.history .history-dot:hover, .history .history-dot:focus-visible { stroke: var(--focus); stroke-width: 3; }
+.history .history-dot:focus { outline: none; }
+.history .label.scale { font-weight: 500; }
+.agate .change-col { white-space: nowrap; }
+
 /* The column under the pointer or keyboard focus fills solid. */
 .columns .year.is-active .col { fill: var(--column); }
 .columns .year.is-active .col.latest { fill: var(--spot); }
