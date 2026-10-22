@@ -272,6 +272,24 @@ function formatChange(cents) {
   return `${cents > 0 ? '+' : '−'}${formatCents(Math.abs(cents))}`;
 }
 
+// One sentence on the whole career: first and latest listed salary. The
+// percentage is skipped when the first salary is zero (it would divide by 0).
+function summarizeHistory(rows) {
+  const peaks = yearlyPeak(rows);
+  const first = peaks[0];
+  const last = peaks[peaks.length - 1];
+  if (first === last) {
+    return `Listed once, in ${first.year}, at ${formatCents(first.salary_cents)}.`;
+  }
+  let percent = '';
+  if (first.salary_cents > 0) {
+    const share = ((last.salary_cents - first.salary_cents) / first.salary_cents) * 100;
+    percent = ` (${share < 0 ? '−' : '+'}${Math.abs(share).toFixed(1)}%)`;
+  }
+  return `First listed in ${first.year} at ${formatCents(first.salary_cents)}; `
+    + `latest in ${last.year} at ${formatCents(last.salary_cents)}${percent}.`;
+}
+
 // Replace a table's rows, and hide the table when there is nothing to show.
 function fillTable(table, rows) {
   table.tBodies[0].replaceChildren(...rows);
