@@ -286,8 +286,12 @@ function summarizeHistory(rows) {
     const share = ((last.salary_cents - first.salary_cents) / first.salary_cents) * 100;
     percent = ` (${share < 0 ? '−' : '+'}${Math.abs(share).toFixed(1)}%)`;
   }
-  return `First listed in ${first.year} at ${formatCents(first.salary_cents)}; `
+  const sentence = `First listed in ${first.year} at ${formatCents(first.salary_cents)}; `
     + `latest in ${last.year} at ${formatCents(last.salary_cents)}${percent}.`;
+  // The list has no person ID, so a repeated year may mean two people.
+  return peaks.length < rows.length
+    ? `${sentence} Some years have several entries; they may be different people with the same name.`
+    : sentence;
 }
 
 // Draw one person's yearly peak salary as a line. Like the columns chart it is
