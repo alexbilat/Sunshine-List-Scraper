@@ -269,7 +269,7 @@ function addChanges(rows) {
 function formatChange(cents) {
   if (cents === null || cents === undefined) return EM_DASH;
   if (cents === 0) return formatCents(0);
-  return `${cents > 0 ? '+' : '−'}${formatCents(Math.abs(cents))}`;
+  return `${cents > 0 ? '+' : '2212'}${formatCents(Math.abs(cents))}`;
 }
 
 // One sentence on the whole career: first and latest listed salary. The
@@ -284,7 +284,7 @@ function summarizeHistory(rows) {
   let percent = '';
   if (first.salary_cents > 0) {
     const share = ((last.salary_cents - first.salary_cents) / first.salary_cents) * 100;
-    percent = ` (${share < 0 ? '−' : '+'}${Math.abs(share).toFixed(1)}%)`;
+    percent = ` (${share < 0 ? '2212' : '+'}${Math.abs(share).toFixed(1)}%)`;
   }
   const sentence = `First listed in ${first.year} at ${formatCents(first.salary_cents)}; `
     + `latest in ${last.year} at ${formatCents(last.salary_cents)}${percent}.`;
