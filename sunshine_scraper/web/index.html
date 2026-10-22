@@ -202,6 +202,14 @@
         </form>
       </div>
       <p class="message" id="search-message" role="status" aria-live="polite">Type a first and last name and press Enter. Names must match exactly as published; capitals and accents don't matter.</p>
+      <!-- Salary over time for the name searched; drawn by app.js. -->
+      <figure class="columns history" id="history-chart" hidden>
+        <figcaption>
+          <span>Salary paid each year</span>
+          <output class="readout" id="history-readout" aria-live="polite"></output>
+        </figcaption>
+        <div class="columns-body" id="history-chart-body"></div>
+      </figure>
       <div class="table-wrap">
         <table id="search-table" class="agate" hidden>
           <thead>
