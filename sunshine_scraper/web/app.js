@@ -290,6 +290,49 @@ function summarizeHistory(rows) {
     + `latest in ${last.year} at ${formatCents(last.salary_cents)}${percent}.`;
 }
 
+// Draw one person's yearly peak salary as a line. Like the columns chart it is
+// plain SVG sized in real pixels, so the page needs no chart library.
+// The vertical scale runs from the lowest to the highest salary shown (not from
+// zero), otherwise a few percent of growth would look flat; the end labels say so.
+function drawHistory(rows) {
+  const figure = $('history-chart');
+  const body = $('history-chart-body');
+  const peaks = yearlyPeak(rows);
+  if (peaks.length === 0) {
+    figure.hidden = true;
+    return;
+  }
+  figure.hidden = false; // before measuring: a hidden box has no width
+
+  const width = Math.max(280, Math.round(body.clientWidth));
+  const height = Math.round(Math.min(280, Math.max(180, width * 0.36)));
+  const inset = { top: 24, right: 12, bottom: 24, left: 12 };
+  const plotWidth = width - inset.left - inset.right;
+  const plotHeight = height - inset.top - inset.bottom;
+  const cents = peaks.map((peak) => peak.salary_cents);
+  const low = Math.min(...cents);
+  const span = Math.max(...cents) - low;
+  const x = (i) => inset.left + (peaks.length === 1 ? plotWidth / 2 : (i * plotWidth) / (peaks.length - 1));
+  // One flat value (or one year) sits mid-height instead of dividing by zero.
+  const y = (value) => inset.top + (span === 0 ? plotHeight / 2 : (1 - (value - low) / span) * plotHeight);
+
+  const chart = svg('svg', {
+    width, height, viewBox: `0 0 ${width} ${height}`, role: 'img',
+    'aria-label': `Salary paid each year from ${peaks[0].year} to ${peaks[peaks.length - 1].year}.`,
+  });
+  chart.append(svg('line', {
+    class: 'baseline', x1: inset.left, x2: width - inset.right,
+    y1: height - inset.bottom, y2: height - inset.bottom,
+  }));
+  if (peaks.length > 1) {
+    chart.append(svg('polyline', {
+      class: 'history-line', fill: 'none',
+      points: peaks.map((peak, i) => `${x(i)},${y(peak.salary_cents)}`).join(' '),
+    }));
+  }
+  body.replaceChildren(chart);
+}
+
 // Replace a table's rows, and hide the table when there is nothing to show.
 function fillTable(table, rows) {
   table.tBodies[0].replaceChildren(...rows);
