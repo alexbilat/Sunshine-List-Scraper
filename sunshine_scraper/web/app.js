@@ -731,7 +731,7 @@ async function searchPerson(event) {
     },
     toRow: personRow,
     done: (items) => (items.length
-      ? `${items.length} disclosure${items.length === 1 ? '' : 's'} for ${text}.`
+      ? `${items.length} disclosure${items.length === 1 ? '' : 's'} for ${text}. ${summarizeHistory(items)}`
       : `No one named ${text} is on the list. Names must match exactly as published.`),
   });
   button.classList.remove('is-searching');
