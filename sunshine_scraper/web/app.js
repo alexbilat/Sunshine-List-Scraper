@@ -803,6 +803,7 @@ async function searchPerson(event) {
   }
   const button = $('search-button');
   button.classList.add('is-searching');
+  $('history-chart').hidden = true; // an error or slow answer must not leave the last person's chart
   await loadTable({
     table: $('search-table'),
     message,
@@ -813,9 +814,12 @@ async function searchPerson(event) {
         .sort((a, b) => b.year - a.year || b.salary_cents - a.salary_cents);
     },
     toRow: personRow,
-    done: (items) => (items.length
-      ? `${items.length} disclosure${items.length === 1 ? '' : 's'} for ${text}. ${summarizeHistory(items)}`
-      : `No one named ${text} is on the list. Names must match exactly as published.`),
+    done: (items) => {
+      drawHistory(items); // hides the chart when nobody was found
+      return items.length
+        ? `${items.length} disclosure${items.length === 1 ? '' : 's'} for ${text}. ${summarizeHistory(items)}`
+        : `No one named ${text} is on the list. Names must match exactly as published.`;
+    },
   });
   button.classList.remove('is-searching');
 }
