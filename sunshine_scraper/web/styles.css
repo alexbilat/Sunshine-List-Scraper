@@ -548,3 +548,5 @@ table.agate {
 @media (min-width: 601px) {
   .agate .employer-inline { display: none; }
 }
+
+.noscript { max-width: 60rem; margin: 1rem auto; padding: 0 1rem; }
