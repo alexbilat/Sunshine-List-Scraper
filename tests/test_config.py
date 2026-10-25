@@ -18,6 +18,13 @@ class ConfigTests(unittest.TestCase):
         import logging
         self.assertIsInstance(logging.getLevelName(config.log_level), int)
 
+    def test_api_protection_limits_are_positive(self):
+        for name in ('api_rate_limit_requests', 'api_rate_limit_window',
+                     'api_statement_timeout_ms', 'api_max_concurrent_queries',
+                     'api_query_wait_seconds'):
+            with self.subTest(setting=name):
+                self.assertGreater(getattr(config, name), 0)
+
 
 if __name__ == '__main__':
     unittest.main()
