@@ -1,0 +1,23 @@
+"""config.py holds hand-edited settings; catch values that would break a run."""
+import unittest
+
+import config
+
+
+class ConfigTests(unittest.TestCase):
+    def test_retry_and_timeout_settings_are_usable(self):
+        self.assertGreater(config.request_timeout, 0)
+        self.assertGreaterEqual(config.max_retries, 0)
+        self.assertGreaterEqual(config.retry_backoff, 0)
+
+    def test_source_urls_are_https(self):
+        for value in (config.url, config.api_url):
+            self.assertTrue(value.startswith('https://'))
+
+    def test_log_level_is_a_real_logging_level(self):
+        import logging
+        self.assertIsInstance(logging.getLevelName(config.log_level), int)
+
+
+if __name__ == '__main__':
+    unittest.main()
