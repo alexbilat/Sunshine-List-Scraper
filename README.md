@@ -101,7 +101,7 @@ anyone can use.
   policy in a `<meta>` tag and goes without `frame-ancestors`,
   `X-Frame-Options` and `nosniff`; it shows public data with no logins or
   forms, so the missing clickjacking protection costs little.
-- **Tested offline.** About 150 unit tests run without a network or database;
+- **Tested offline.** About 160 unit tests run without a network or database;
   real-PostgreSQL integration tests are opt-in.
 
 ## Tech stack
