@@ -25,6 +25,10 @@ class ConfigTests(unittest.TestCase):
             with self.subTest(setting=name):
                 self.assertGreater(getattr(config, name), 0)
 
+    def test_full_refresh_is_a_bool(self):
+        # A string like 'False' would be truthy and silently reload everything.
+        self.assertIsInstance(config.full_refresh, bool)
+
     def test_publish_settings_are_not_empty(self):
         # An empty pages_branch would make publish_site.py force-push nowhere useful.
         self.assertTrue(config.site_dir.strip())
