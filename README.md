@@ -224,7 +224,7 @@ Available while the local server is running. All endpoints are `GET` and return 
 | --- | --- |
 | `/api/health` | `{"status": "ok"}` when the database answers |
 | `/api/years` | Headcount and average salary for each year |
-| `/api/titles/top?limit=10` | Most common job titles (`limit` 1–100) |
+| `/api/titles/top?limit=10` | Most common job titles (`limit` 1–100); titles with the same words are grouped, ignoring order, case, punctuation and plurals |
 | `/api/salaries/top?year=2025&limit=10` | Highest salaries in a year (`limit` 1–100) |
 | `/api/people?first_name=Jane&last_name=Doe` | Every disclosure for one exact name; case and accents ignored |
 
