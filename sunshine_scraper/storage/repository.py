@@ -75,11 +75,11 @@ class PostgresSalaryRepository:
             raise ValueError(f"limit must be an integer between 1 and {MAX_LIMIT}")
         rows = self.connection.execute(
             """
-            SELECT job_title, count(*) AS appearances
+            SELECT mode() WITHIN GROUP (ORDER BY job_title) AS label, count(*) AS appearances
             FROM salary_records
-            WHERE job_title <> ''
-            GROUP BY job_title
-            ORDER BY appearances DESC, job_title
+            WHERE title_key <> ''
+            GROUP BY title_key
+            ORDER BY appearances DESC, label
             LIMIT %s
             """,
             (limit,)).fetchall()
