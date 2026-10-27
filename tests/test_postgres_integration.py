@@ -185,6 +185,19 @@ class ReadTests(PostgresTestCase):
         self.assertEqual(self.reader.get_top_salaries(2024, 1)[0].salary_cents, 20000005)
 
 
+class TitleGroupingTests(PostgresTestCase):
+    def test_equivalent_titles_share_a_group_labelled_by_the_common_spelling(self):
+        def person(first, title):
+            return Disclosure(first, 'Example', title, 'Board', 2024, 10000000)
+        self.load('a', [person('A', 'Elementary Teacher'), person('B', 'Elementary Teacher'),
+                        person('C', 'Teacher - Elementary'), person('D', 'Elementary Teachers'),
+                        person('E', 'Assistant Director'), person('F', 'Associate Director'),
+                        person('G', '')])
+        titles = [(t.job_title, t.appearances) for t in self.reader.top_job_titles(10)]
+        self.assertEqual(titles, [('Elementary Teacher', 4), ('Assistant Director', 1),
+                                  ('Associate Director', 1)])
+
+
 class NameSearchTests(PostgresTestCase):
     def test_exact_full_name_ignoring_case_and_accents(self):
         def person(first, last, year=2024):
