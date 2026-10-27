@@ -197,6 +197,14 @@ class TitleGroupingTests(PostgresTestCase):
         self.assertEqual(titles, [('Elementary Teacher', 4), ('Assistant Director', 1),
                                   ('Associate Director', 1)])
 
+    def test_title_key_rules(self):
+        def key(title):
+            return self.connection.execute('SELECT title_key(%s)', (title,)).fetchone()[0]
+        self.assertEqual(key('Director of Finance'), key('Finance, Director'))
+        self.assertEqual(key('Secretaries'), key('Secretary'))
+        self.assertNotEqual(key('Business'), key('Busine'))  # "ss" is not a plural
+        self.assertEqual(key(''), '')
+
 
 class NameSearchTests(PostgresTestCase):
     def test_exact_full_name_ignoring_case_and_accents(self):
