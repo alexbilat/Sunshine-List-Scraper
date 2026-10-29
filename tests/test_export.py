@@ -29,6 +29,18 @@ class WriteRecordsTests(unittest.TestCase):
             self.assertEqual(path.read_text(encoding='utf-8'), 'old')
             self.assertEqual([p.name for p in Path(folder).iterdir()], ['out.txt'])
 
+    def test_empty_input_writes_header_only(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'out.txt'
+            write_records([], path)
+            self.assertEqual(path.read_text(encoding='utf-8'), '\t'.join(COLUMNS) + '\n')
+
+    def test_accented_names_round_trip_as_utf8(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'out.txt'
+            write_records([dict.fromkeys(COLUMNS, 'José Émond')], path)
+            self.assertIn('José Émond', path.read_text(encoding='utf-8'))
+
 
 if __name__ == '__main__':
     unittest.main()
