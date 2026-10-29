@@ -16,6 +16,8 @@ __pycache__/
 /output.txt
 /chart_yearly.png
 /chart_titles.png
+# Leftover from an interrupted atomic write (export.py).
+/.output.txt.*.tmp
 
 # Built static website (publish_site.py); it is published to the gh-pages branch.
 /site/
