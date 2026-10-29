@@ -205,7 +205,7 @@ in `site/` instead.
 | Top salaries from the terminal | `python -m sunshine_scraper.storage top --year 2025 --limit 10` |
 | Check the database connection | `python -m sunshine_scraper.storage check` |
 | Apply pending schema changes | `python -m sunshine_scraper.storage migrate` |
-| Show pending schema changes | `python -m sunshine_scraper.storage migrate --status` |
+| Show applied and pending schema changes | `python -m sunshine_scraper.storage migrate --status` |
 | Run the tests | `python -m unittest discover -s tests -v` |
 
 To keep data fresh on Windows, schedule `daily_update.cmd` to run daily in Task
