@@ -276,7 +276,7 @@ assets/                    Images used in this README
 python -m unittest discover -s tests -v
 ```
 
-The suite runs offline and needs no database. To include the real-PostgreSQL
+The suite runs offline and needs no database (the database tests are skipped). To include the real-PostgreSQL
 integration tests, set `SUNSHINE_TEST_DATABASE_URL` to a **separate, empty**
 database; those tests create and drop their own schemas in it.
 
