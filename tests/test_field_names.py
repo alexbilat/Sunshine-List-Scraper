@@ -17,6 +17,10 @@ class FieldNameTests(unittest.TestCase):
         self.assertEqual(get_record_field({'salary paid': 0}, 'salary'), 0)
         self.assertIsNone(get_record_field({}, 'employer'))
 
+    def test_missing_or_blank_field_returns_none(self):
+        self.assertIsNone(get_record_field({'salary': '  '}, 'salary'))
+        self.assertIsNone(get_record_field({}, 'employer'))
+
 
 if __name__ == '__main__':
     unittest.main()
