@@ -259,6 +259,7 @@ sunshine_scraper/
 ├── processing.py          Column-name aliases and text normalization
 ├── sync.py                Change detection, validation, one transaction per dataset
 ├── pipeline.py            Sync, then export TSV, summary, and charts
+├── errors.py              ScraperError, the shared failure type
 ├── export.py              Atomic TSV writer
 ├── reporting.py           Console summary and matplotlib charts
 ├── static_site.py         Static site builder and GitHub Pages publisher
