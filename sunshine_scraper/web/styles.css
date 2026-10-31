@@ -550,3 +550,6 @@ table.agate {
 }
 
 .noscript { max-width: 60rem; margin: 1rem auto; padding: 0 1rem; }
+
+/* Balanced line breaks avoid a single orphaned word on the last line. */
+h2, h3, .headline-words { text-wrap: balance; }
