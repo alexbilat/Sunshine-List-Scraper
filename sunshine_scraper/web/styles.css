@@ -553,3 +553,11 @@ table.agate {
 
 /* Balanced line breaks avoid a single orphaned word on the last line. */
 h2, h3, .headline-words { text-wrap: balance; }
+
+/* Printing: ink on white, no controls, and keep rows from splitting. */
+@media print {
+  :root { --paper: #fff; --paper-raised: #fff; --ink: #000; --ink-soft: #000; }
+  .tabs, .controls, .search-bar, .skip-link, .text-button, .health { display: none; }
+  .panel[hidden] { display: none; }
+  .agate tr { break-inside: avoid; }
+}
