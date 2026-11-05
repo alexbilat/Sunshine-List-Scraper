@@ -166,6 +166,7 @@ main,
 .tabs button:first-child { border-left: 1px solid var(--ink); }
 .tabs button:hover { background: var(--paper-raised); }
 .tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.tabs button { touch-action: manipulation; } /* no double-tap-zoom delay on tabs */
 .tabs button:focus-visible { outline-offset: -4px; outline-color: var(--paper); }
 .tabs button[aria-selected="false"]:focus-visible { outline-color: var(--focus); }
 
