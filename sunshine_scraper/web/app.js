@@ -866,8 +866,10 @@ function setUpTabs() {
     // Arrow keys move between tabs, as screen-reader users expect.
     tab.addEventListener('keydown', (event) => {
       const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
-      if (step) {
-        const next = tabs[(index + step + tabs.length) % tabs.length];
+      const jump = { Home: 0, End: tabs.length - 1 }[event.key];
+      if (step || jump !== undefined) {
+        event.preventDefault();
+        const next = jump !== undefined ? tabs[jump] : tabs[(index + step + tabs.length) % tabs.length];
         next.focus();
         selectTab(next);
       }
