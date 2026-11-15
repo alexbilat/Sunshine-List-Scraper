@@ -18,6 +18,7 @@ from typing import Annotated, Callable, ContextManager, Iterator
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+import openai
 
 # config.py sits at the project root, like for the CLI. uvicorn and the tests
 # both run from that directory, so it is importable here too.
@@ -27,7 +28,7 @@ from ..storage.connection import (DatabaseAccessError, DatabaseConfigurationErro
                                   DatabaseSettings, open_read_only_connection)
 from ..storage.repository import MAX_LIMIT, PostgresSalaryRepository, SalaryReader
 from .ratelimit import RateLimiter
-from ..agent.agent import run_agent
+from ..agent.agent import ChatUnavailableError, run_agent
 from .schemas import (AskRequest, AskResponse, Health, PersonSalary, Salary, TitleStats,
                       YearStats)
 
@@ -212,6 +213,30 @@ def database_unavailable(request: Request, error: Exception) -> JSONResponse:
     """
     logger.error('%s %s failed: %s', request.method, request.url.path, error)
     return JSONResponse(status_code=503, content={'detail': 'Database unavailable'})
+
+
+@app.exception_handler(openai.RateLimitError)
+def groq_rate_limited(request: Request, error: Exception) -> JSONResponse:
+    """Groq refused because our account sent too much (its free tier is small).
+
+    429 like our own limiter, but the message says it is the AI service that
+    is busy, so a visitor knows waiting a minute should help.
+    """
+    logger.warning('Groq rate limit: %s', error)
+    return JSONResponse(status_code=429, content={
+        'detail': 'The AI service is busy right now. Please try again in a minute.'})
+
+
+@app.exception_handler(openai.APIError)
+@app.exception_handler(ChatUnavailableError)
+def chat_unavailable(request: Request, error: Exception) -> JSONResponse:
+    """Any other Groq failure (outage, timeout, bad key) or a missing key.
+
+    The real reason goes to the server log only; it may name the model or
+    account details, which are no business of the visitor.
+    """
+    logger.error('Chat failed: %s', error)
+    return JSONResponse(status_code=503, content={'detail': 'Chat is unavailable right now.'})
 
 
 # --- Routes -----------------------------------------------------------------

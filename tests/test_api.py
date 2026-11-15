@@ -10,9 +10,12 @@ import unittest
 from unittest.mock import MagicMock, call, patch
 
 from fastapi.testclient import TestClient
+import httpx
+import openai
 import psycopg
 
 import config
+from sunshine_scraper.agent.agent import ChatUnavailableError
 from sunshine_scraper.api.app import app, get_open_reader
 from sunshine_scraper.storage.connection import DatabaseAccessError
 
@@ -141,6 +144,22 @@ class AskRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 429)
         self.assertIn('asking quickly', response.json()['detail'])
         self.assertGreaterEqual(int(response.headers['Retry-After']), 1)
+
+    def test_groq_rate_limit_gets_friendly_429(self):
+        groq_response = httpx.Response(429, request=httpx.Request('POST', 'https://groq.test'))
+        self.run_agent.side_effect = openai.RateLimitError(
+            'rate limited', response=groq_response, body=None)
+        with self.assertLogs('sunshine_scraper.api.app', level='WARNING'):
+            response = self.client.post('/api/ask', json={'question': 'q'})
+        self.assertEqual(response.status_code, 429)
+        self.assertIn('AI service is busy', response.json()['detail'])
+
+    def test_missing_key_gets_503_without_details(self):
+        self.run_agent.side_effect = ChatUnavailableError('GROQ_API_KEY is not set')
+        with self.assertLogs('sunshine_scraper.api.app', level='ERROR'):
+            response = self.client.post('/api/ask', json={'question': 'q'})
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn('GROQ', response.text)
 
 
 class ConnectionTests(unittest.TestCase):
