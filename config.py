@@ -34,6 +34,12 @@ full_refresh = False
 api_rate_limit_requests = 60
 api_rate_limit_window = 60
 
+# Stricter limit for the chat agent (POST /api/ask): every question costs Groq
+# tokens and takes several seconds, so each address may ask this many
+# questions per window seconds, on top of the general limit above.
+api_ask_rate_limit_requests = 10
+api_ask_rate_limit_window = 60
+
 # Milliseconds a single API query may run before PostgreSQL cancels it and the
 # client gets 503. Keeps one slow query from holding a worker indefinitely.
 api_statement_timeout_ms = 5000

@@ -108,6 +108,7 @@ class AskRouteTests(unittest.TestCase):
 
     def setUp(self):
         app.state.rate_limiter.reset()
+        app.state.ask_rate_limiter.reset()
         self.client = TestClient(app)
         patcher = patch('sunshine_scraper.api.app.run_agent',
                         return_value=('Sam earned the most.',
@@ -131,6 +132,15 @@ class AskRouteTests(unittest.TestCase):
                      {'question': '   '}):
             self.assertEqual(self.client.post('/api/ask', json=body).status_code, 422)
         self.run_agent.assert_not_called()
+
+    def test_ask_limit_is_stricter_than_general_limit(self):
+        for _ in range(config.api_ask_rate_limit_requests):
+            self.assertEqual(self.client.post('/api/ask', json={'question': 'q'}).status_code, 200)
+        with self.assertLogs('sunshine_scraper.api.app', level='WARNING'):
+            response = self.client.post('/api/ask', json={'question': 'q'})
+        self.assertEqual(response.status_code, 429)
+        self.assertIn('asking quickly', response.json()['detail'])
+        self.assertGreaterEqual(int(response.headers['Retry-After']), 1)
 
 
 class ConnectionTests(unittest.TestCase):

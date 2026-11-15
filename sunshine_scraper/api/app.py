@@ -48,6 +48,11 @@ app.state.rate_limiter = RateLimiter(
     capacity=config.api_rate_limit_requests,
     refill_per_second=config.api_rate_limit_requests / config.api_rate_limit_window,
 )
+# A second, stricter bucket only for questions to the chat agent.
+app.state.ask_rate_limiter = RateLimiter(
+    capacity=config.api_ask_rate_limit_requests,
+    refill_per_second=config.api_ask_rate_limit_requests / config.api_ask_rate_limit_window,
+)
 
 
 # --- Middleware ---------------------------------------------------------------
@@ -262,7 +267,7 @@ def people(open_reader: OpenReader, first_name: PersonName,
 
 
 @app.post('/api/ask', response_model=AskResponse)
-def ask(body: AskRequest) -> AskResponse:
+def ask(body: AskRequest, request: Request) -> AskResponse:
     """Answer a plain-English question about the data with the chat agent.
 
     POST because the question and history travel in a JSON body. The agent
@@ -270,6 +275,18 @@ def ask(body: AskRequest) -> AskResponse:
     browser. Each tool the agent runs opens its own read_only_connection, so
     database access keeps the same read-only, slot and timeout protections.
     """
+    # Same client key as the middleware (never X-Forwarded-For; see there).
+    # Checked after validation, so a malformed request does not use a question.
+    client = request.client.host if request.client else 'unknown'
+    wait = request.app.state.ask_rate_limiter.check(client)
+    if wait is not None:
+        seconds = max(1, math.ceil(wait))
+        logger.warning('Ask rate limit exceeded for %s', client)
+        return JSONResponse(
+            status_code=429,
+            content={'detail': f"You're asking quickly. Try again in {seconds} seconds."},
+            headers={'Retry-After': str(seconds)},
+        )
     history = [turn.model_dump() for turn in body.history]
     answer, tool_calls = run_agent(body.question, history, read_only_connection)
     return AskResponse(answer=answer, tool_calls=tool_calls)
