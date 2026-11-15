@@ -57,6 +57,8 @@
       <button type="button" role="tab" id="tab-years" aria-controls="panel-years" aria-selected="false">Years</button>
       <button type="button" role="tab" id="tab-titles" aria-controls="panel-titles" aria-selected="false">Job titles</button>
       <button type="button" role="tab" id="tab-search" aria-controls="panel-search" aria-selected="false">Search</button>
+      <!-- Removed by app.js on the static site, which has no server to run the chat. -->
+      <button type="button" role="tab" id="tab-ask" aria-controls="panel-ask" aria-selected="false">Ask</button>
     </div>
   </nav>
 
@@ -229,6 +231,21 @@
           <tbody></tbody>
         </table>
       </div>
+    </section>
+
+    <section class="panel" id="panel-ask" role="tabpanel" aria-labelledby="tab-ask" hidden>
+      <div class="panel-head">
+        <h2>Ask about the data</h2>
+        <form class="search-bar" id="ask-form">
+          <label class="visually-hidden" for="ask-input">Question</label>
+          <input id="ask-input" name="question" type="text" required maxlength="500"
+                 autocomplete="off" enterkeyhint="send" placeholder="e.g. Top 5 earners at the University of Waterloo in 2024">
+          <button type="submit" id="ask-button"><span class="search-label">Ask</span></button>
+        </form>
+      </div>
+      <p class="message" id="ask-message" role="status" aria-live="polite">An AI model answers by looking up the list. It can still make mistakes, so check important figures in the other tabs.</p>
+      <!-- Questions and answers, oldest first; filled by app.js. -->
+      <ol class="chat-log" id="chat-log"></ol>
     </section>
   </main>
 
