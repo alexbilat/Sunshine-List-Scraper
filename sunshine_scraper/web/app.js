@@ -95,6 +95,7 @@ const liveSource = {
   statusFailed: (error) => (error.status === 429 ? 'Busy' : 'Database unavailable'),
   // FastAPI's interactive /docs page exists only on the live server.
   hasApiDocs: true,
+  hasChat: true, // the Ask tab needs this server (it keeps the AI key)
 };
 
 // The static files hold the top 100 of each list; the page shows the first
@@ -141,6 +142,7 @@ const staticSource = {
   },
   statusFailed: () => 'Data unavailable',
   hasApiDocs: false,
+  hasChat: false,
 };
 
 const source =
@@ -828,6 +830,76 @@ async function searchPerson(event) {
   button.classList.remove('is-searching');
 }
 
+// --- Ask (chat agent) ---------------------------------------------------------
+// The browser only sends the question; the server runs the AI agent and its
+// database lookups, so the AI key never reaches this page.
+
+// Earlier questions and answers, sent with each new question so follow-ups
+// ("and in 2023?") make sense. Only the last 10 messages: the server's limit.
+const chatHistory = [];
+
+async function askQuestion(event) {
+  event.preventDefault(); // stop the browser's own form submission (a reload)
+  const input = $('ask-input');
+  const question = input.value.trim();
+  if (!question) return;
+  const message = $('ask-message');
+  const button = $('ask-button');
+  button.disabled = true;
+  button.classList.add('is-searching');
+  showMessage(message, `Thinking${ELLIPSIS}`, 'loading');
+  try {
+    const response = await fetch('/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ question, history: chatHistory.slice(-10) }),
+    });
+    if (!response.ok) {
+      showMessage(message, await askErrorText(response), 'error');
+      return; // keep the question in the box so it can be sent again
+    }
+    const result = await response.json(); // { answer, tool_calls: [{ name, arguments }] }
+    addChatEntry(question, result);
+    chatHistory.push({ role: 'user', content: question },
+                     { role: 'assistant', content: result.answer });
+    input.value = '';
+    showMessage(message, '');
+  } catch {
+    // fetch rejects only when no response arrived at all (server stopped).
+    showMessage(message, 'Cannot reach the server. Is it still running?', 'error');
+  } finally {
+    // finally runs on every path above, including the early return.
+    button.disabled = false;
+    button.classList.remove('is-searching');
+  }
+}
+
+// Prefer the server's own sentence (e.g. "The AI service is busy..."), which
+// says more than a generic one; fall back to the shared wording.
+async function askErrorText(response) {
+  try {
+    const body = await response.clone().json();
+    if (typeof body.detail === 'string') return body.detail;
+  } catch {
+    // Not JSON; use the generic message below.
+  }
+  return describeError(response);
+}
+
+// Append one question, its answer, and the tools the agent used to the log.
+// textContent only: the answer is AI-written text and must never become HTML.
+function addChatEntry(question, result) {
+  const item = element('li');
+  item.append(element('p', 'chat-question', question));
+  item.append(element('p', 'chat-answer', result.answer));
+  const tools = result.tool_calls.length
+    ? result.tool_calls.map((call) => `${call.name}(${call.arguments})`).join(', ')
+    : 'none';
+  item.append(element('p', 'chat-tools', `Tools used: ${tools}`));
+  $('chat-log').append(item);
+  item.scrollIntoView({ block: 'nearest' });
+}
+
 // --- Tabs ---------------------------------------------------------------------
 
 // Each panel loads its data the first time it is opened, not on page load, so
@@ -889,6 +961,11 @@ function setUpTabs() {
 
 function start() {
   $('api-docs-link').hidden = !source.hasApiDocs;
+  // Removed rather than hidden, so the arrow keys never land on a dead tab.
+  if (!source.hasChat) {
+    $('tab-ask').remove();
+    $('panel-ask').remove();
+  }
   setUpTabs();
   // The lists update as soon as a choice changes. preventDefault stops the
   // browser's own form submission (a page reload) if Enter is pressed.
@@ -896,6 +973,7 @@ function start() {
     form.addEventListener('submit', (event) => event.preventDefault());
   }
   $('search-form').addEventListener('submit', searchPerson);
+  if (source.hasChat) $('ask-form').addEventListener('submit', askQuestion);
   $('salaries-year').addEventListener('change', showTopSalaries);
   $('salaries-limit').addEventListener('change', showTopSalaries);
   $('titles-limit').addEventListener('change', showTitles);
