@@ -90,7 +90,7 @@ anyone can use.
   is remembered.
 - **Versioned schema.** Numbered SQL migrations with checksums; the scraper
   refuses to run against an out-of-date schema instead of guessing.
-- **Hardened API.** GET-only routes, `READ ONLY` transactions, per-client
+- **Hardened API.** GET-only data routes, `READ ONLY` transactions, per-client
   token-bucket rate limiting (`429` + `Retry-After`), a cap on concurrent
   queries (requests wait up to `api_query_wait_seconds` for a free slot, then
   get `503`), a per-query timeout, and error messages that never leak
@@ -101,6 +101,11 @@ anyone can use.
   policy in a `<meta>` tag and goes without `frame-ancestors`,
   `X-Frame-Options` and `nosniff`; it shows public data with no logins or
   forms, so the missing clickjacking protection costs little.
+- **Hand-written AI agent.** The local site's Ask tab answers plain-English
+  questions. A tool-calling loop written without an agent framework sends the
+  question to Groq, runs the database lookups the model asks for, and repeats
+  until it answers (at most 8 rounds). The model may state only numbers its
+  tools returned. The API key stays on the server.
 - **Tested offline.** About 160 unit tests run without a network or database;
   real-PostgreSQL integration tests are opt-in.
 
@@ -111,6 +116,7 @@ anyone can use.
 | Collection | Python 3.12, `requests`, Beautiful Soup |
 | Storage | PostgreSQL 14+, `psycopg` 3 (`COPY`, server-side cursors, advisory locks) |
 | API | FastAPI, Pydantic, Uvicorn |
+| Chat agent | Groq (`openai/gpt-oss-120b`) through the `openai` SDK, `python-dotenv` |
 | Website | Plain HTML, CSS, and JavaScript (inline SVG chart) |
 | Reports | matplotlib |
 | Hosting | GitHub Pages (static) |
@@ -181,6 +187,15 @@ uvicorn sunshine_scraper.api.app:app
 Visit <http://127.0.0.1:8000/> for the website or <http://127.0.0.1:8000/docs>
 for interactive API documentation.
 
+To use the **Ask** tab, get a free key at <https://console.groq.com/keys> and
+put it in a `.env` file in the project folder (gitignored; see `.env.example`):
+
+```
+GROQ_API_KEY=your-key-here
+```
+
+The Ask tab only works on the local server; the public static site leaves it out.
+
 ### 6. Publish your own public copy (optional)
 
 If you forked the repository:
@@ -218,7 +233,7 @@ nothing changed finish in about a minute.
 
 ## API
 
-Available while the local server is running. All endpoints are `GET` and return JSON.
+Available while the local server is running. All data endpoints are `GET` and return JSON.
 
 | Endpoint | Returns |
 | --- | --- |
@@ -227,6 +242,7 @@ Available while the local server is running. All endpoints are `GET` and return 
 | `/api/titles/top?limit=10` | Most common job titles (`limit` 1–100); titles with the same words are grouped, ignoring order, case, punctuation and plurals |
 | `/api/salaries/top?year=2025&limit=10` | Highest salaries in a year (`limit` 1–100) |
 | `/api/people?first_name=Jane&last_name=Doe` | Every disclosure for one exact name; case and accents ignored |
+| `POST /api/ask` | Body `{"question": "...", "history": [...]}`; returns `{"answer", "tool_calls"}` from the chat agent (10 questions/minute per client) |
 
 ```json
 GET /api/salaries/top?year=2025&limit=1
@@ -237,7 +253,7 @@ GET /api/salaries/top?year=2025&limit=1
 
 Errors: `422` for invalid parameters (the body says which), `429` when the rate
 limit is reached (wait `Retry-After` seconds), `503` when the database is
-unavailable.
+unavailable (or, for `/api/ask`, when the AI service is down).
 
 ## Configuration
 
@@ -265,6 +281,7 @@ sunshine_scraper/
 ├── static_site.py         Static site builder and GitHub Pages publisher
 ├── storage/               Models, connection, migrations, bulk writer, queries
 ├── api/                   FastAPI app, response schemas, rate limiter
+├── agent/                 Chat agent: database tools and the tool-calling loop
 └── web/                   The website (HTML, CSS, JavaScript)
 tests/                     Unit and integration tests
 assets/                    Images used in this README
