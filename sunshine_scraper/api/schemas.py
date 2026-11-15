@@ -6,8 +6,9 @@ model chooses exactly which fields leave the server and what they are called.
 FastAPI also reads these classes to document every response at /docs.
 """
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..storage.models import PersonRow, SalaryResult, TitleCount, YearSummary, format_cents
 
@@ -93,3 +94,35 @@ def round_to_cents(average_cents: Decimal | None) -> int | None:
     if average_cents is None:
         return None
     return int(Decimal(average_cents).to_integral_value(rounding=ROUND_HALF_UP))
+
+
+# --- Chat agent (POST /api/ask) ---------------------------------------------
+# The request body is untrusted input that goes straight into the model's
+# context, so it is limited here: Pydantic rejects anything else with a 422
+# before the route runs.
+
+class ChatTurn(BaseModel):
+    """One earlier message in the conversation, sent back by the browser."""
+
+    # Only these two roles: a client must not be able to add its own "system"
+    # message (new rules) or fake "tool" results (made-up data).
+    role: Literal['user', 'assistant']
+    content: str = Field(max_length=2000)
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=500, pattern=r'\S')
+    # A few turns are enough for follow-ups and keep each request cheap.
+    history: list[ChatTurn] = Field(default=[], max_length=10)
+
+
+class ToolCall(BaseModel):
+    """A tool the agent ran, shown under the answer."""
+
+    name: str
+    arguments: str  # the JSON text the model sent, e.g. '{"year": 2024}'
+
+
+class AskResponse(BaseModel):
+    answer: str
+    tool_calls: list[ToolCall]

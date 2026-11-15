@@ -5,7 +5,8 @@ Then open http://127.0.0.1:8000/ for the web page, or /docs to try every
 endpoint directly.
 
 The API only reads. The scraper (a separate process) is the only writer, so
-every route is a GET and every database transaction is marked read-only.
+every database transaction is marked read-only. Data routes are GETs; the one
+POST, /api/ask, sends a question to the chat agent and still only reads.
 """
 from contextlib import contextmanager
 import logging
@@ -26,7 +27,9 @@ from ..storage.connection import (DatabaseAccessError, DatabaseConfigurationErro
                                   DatabaseSettings, open_read_only_connection)
 from ..storage.repository import MAX_LIMIT, PostgresSalaryRepository, SalaryReader
 from .ratelimit import RateLimiter
-from .schemas import Health, PersonSalary, Salary, TitleStats, YearStats
+from ..agent.agent import run_agent
+from .schemas import (AskRequest, AskResponse, Health, PersonSalary, Salary, TitleStats,
+                      YearStats)
 
 logger = logging.getLogger(__name__)
 
@@ -256,6 +259,20 @@ def people(open_reader: OpenReader, first_name: PersonName,
     with open_reader() as reader:
         rows = reader.person_history(first_name, last_name)
     return [PersonSalary.from_row(row) for row in rows]
+
+
+@app.post('/api/ask', response_model=AskResponse)
+def ask(body: AskRequest) -> AskResponse:
+    """Answer a plain-English question about the data with the chat agent.
+
+    POST because the question and history travel in a JSON body. The agent
+    calls Groq from here, on the server, so the API key never reaches the
+    browser. Each tool the agent runs opens its own read_only_connection, so
+    database access keeps the same read-only, slot and timeout protections.
+    """
+    history = [turn.model_dump() for turn in body.history]
+    answer, tool_calls = run_agent(body.question, history, read_only_connection)
+    return AskResponse(answer=answer, tool_calls=tool_calls)
 
 
 # --- Frontend -----------------------------------------------------------------
